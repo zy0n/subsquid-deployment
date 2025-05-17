@@ -1,0 +1,106 @@
+enum ActionType {
+  CommitmentBatch
+  GeneratedCommitmentBatch
+  Shield
+  Transact
+  Nullifier
+  Unshield
+}
+
+# Sync with TS enum in railgun-smart-wallet.ts
+enum TokenType {
+  ERC20
+  ERC721
+  ERC1155
+}
+
+type Token @entity {
+  id: ID! # output of getTokenID()
+  tokenType: TokenType!
+  tokenAddress: Bytes! #address
+  tokenSubID: ID!
+}
+
+type CommitmentBatchCiphertext @entity {
+  id: ID! # TODO: decide id composition
+  ciphertext: [BigInt!]!
+  ephemeralKeys: [BigInt!]!
+  memo: [BigInt!]!
+
+}
+
+type GeneratedCommitmentBatchCommitment @entity {
+  id: ID! # TODO: decide id composition
+  npk: BigInt!
+  token: Token!
+  value: BigInt!
+}
+
+# TODO: same as above, determine usefulness of separation.
+type ShieldCommitment @entity {
+  id: ID! # TODO: decide id composition
+  npk: BigInt!
+  token: Token!
+  value: BigInt!
+}
+
+type ShieldCiphertext @entity {
+  encryptedBundle: [BigInt!]!
+  shieldKey: BigInt!
+}
+
+type TransactCiphertext @entity {
+  id: ID! # TODO: decide id composition
+  ciphertext: [BigInt!]!
+  blindedSenderViewingKey: BigInt!
+  blindedReceiverViewingKey: BigInt!
+  annotationData: BigInt!
+  memo: BigInt!
+}
+
+# Actions 
+type CommitmentBatch @entity {
+  id: ID! # TODO: decide id composition
+  treeNumber: Int!
+  startPosition: Int!
+  hash: [BigInt!]!
+  ciphertext: [CommitmentBatchCiphertext!]!
+}
+
+type GeneratedCommitmentBatch @entity {
+  id: ID! # TODO: decide id composition
+  treeNumber: Int!
+  startPosition: Int!
+  commitments: [GeneratedCommitmentBatchCommitment!]!
+  encryptedRandom: [[BigInt!]!]!
+}
+
+type Shield @entity {
+  id: ID! # TODO: decide id composition
+  treeNumber: Int!
+  startPosition: Int!
+  commitments: [ShieldCommitment!]!
+  shieldCiphertext: [ShieldCiphertext!]!
+}
+
+type Transact @entity {
+  id: ID! # TODO: decide id composition
+  treeNumber: Int!
+  startPosition: Int!
+  hash: [BigInt!]!
+  ciphertext: [TransactCiphertext!]!
+}
+
+type Nullifier @entity {
+  id: ID! # TODO: decide id composition
+  treeNumber: BigInt!
+  nullifier: [BigInt!]! # TODO: check ability rename this (s)  
+}
+
+type Unshield @entity {
+  id: ID! # TODO: decide id composition
+  npk: BigInt!
+  token: Token!
+  amount: BigInt!
+  fee: BigInt!
+}
