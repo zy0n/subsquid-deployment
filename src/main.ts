@@ -32,7 +32,6 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
             if (evt.address.toLowerCase() !== contractAddress) continue;
 
             const e = evt as EvmProcessorLog;
-            console.log('from', e.transaction.from)
             switch (e.topics[0]) {
                 case events.Nullified.topic:
                 case events.Nullifiers.topic:

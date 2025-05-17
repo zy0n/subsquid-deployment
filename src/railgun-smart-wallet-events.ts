@@ -69,7 +69,29 @@ export async function handleCommitmentBatch(e: EvmProcessorLog, ctx: DataHandler
     lcc: Array<LegacyCommitmentCiphertext>,
     lec: Array<LegacyEncryptedCommitment>
 }> {
-    const data = events.CommitmentBatch.decode(e);
+
+    type CommitmentBatch = ReturnType<typeof events.CommitmentBatch.decode>
+    const data: CommitmentBatch = events.CommitmentBatch.decode(e);
+
+    const [treeNumber, startPosition, hash, ciphertext] = data;
+    const innerCiphertexts = ciphertext.map(c=>{
+        const [innerCiphertext, ephemeralKeys, innerMemo] = c;
+        // console.log(innerCiphertext)
+        // const [iv, tag, data, data2] = innerCiphertext;
+        return {
+            ciphertext: innerCiphertext,
+            ephemeralKeys,
+            memo: innerMemo
+        }
+    });
+    const output = {
+        treeNumber, 
+        startPosition, 
+        hash, 
+        ciphertext: innerCiphertexts,
+    }
+
+    // console.log('data', data as CommitmentBatch)
 
     const ciphertexts = new Array<Ciphertext>();
     const legacyCommitmentCiphertexts = new Array<LegacyCommitmentCiphertext>();
