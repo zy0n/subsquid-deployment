@@ -62,3 +62,18 @@ export function createToken(tokenType: number, tokenAddress: string, tokenSubID:
         tokenSubID: bigIntToPaddedHexString(tokenSubID)
     });
 }
+
+export type BasicToken = {
+    tokenType: TokenType;
+    tokenAddress: string;
+    tokenSubID: string,
+
+}
+
+export function createBasicToken(tokenType: number, tokenAddress: string, tokenSubID: bigint): BasicToken {
+    return {
+        tokenType: getTokenTypeEnum(tokenType),
+        tokenAddress,
+        tokenSubID: bigIntToPaddedHexString(tokenSubID)
+    };
+}

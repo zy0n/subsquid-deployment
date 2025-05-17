@@ -4,7 +4,7 @@ import { events } from "./abi/RailgunSmartWallet";
 import { idFrom2PaddedBigInts, idFromEventLogIndex } from "./id";
 import { bigIntToPad32Bytes, bigIntToPaddedBytes, bigIntToPaddedHexString, hexStringToBytes, padHexStringToEven, padTo32BytesStart} from "./utils";
 import { getCiphertextData, getCiphertextIV, getCiphertextTag } from "./ciphertext";
-import { createToken } from "./token";
+import { createBasicToken, createToken, type BasicToken } from "./token";
 import { getNoteHash } from "./hash";
 import { DataHandlerContext } from "@subsquid/evm-processor";
 import { Store } from "@subsquid/typeorm-store";
@@ -41,8 +41,15 @@ function parseCiphertext(id: string, ciphertexts: string[]): Ciphertext {
 
 export function handleNullifier(e: EvmProcessorLog): Array<Nullifier> {
     const data = extractNullifierData(e);
-    const treeNumber = data.treeNumber;
     const nullifiers = data.nullifier;
+
+    const {treeNumber, nullifier} = data;
+
+    const output = {
+        treeNumber,
+        nullifier
+    };
+    // console.log('Nullifier', output)
 
     let nullified = new Array<Nullifier>();
     for (let i = 0; i < nullifiers.length; i++) {
@@ -70,9 +77,9 @@ export async function handleCommitmentBatch(e: EvmProcessorLog, ctx: DataHandler
     lec: Array<LegacyEncryptedCommitment>
 }> {
 
-    type CommitmentBatch = ReturnType<typeof events.CommitmentBatch.decode>
-    const data: CommitmentBatch = events.CommitmentBatch.decode(e);
+    const data = events.CommitmentBatch.decode(e);
 
+    // console.log(data);
     const [treeNumber, startPosition, hash, ciphertext] = data;
     const innerCiphertexts = ciphertext.map(c=>{
         const [innerCiphertext, ephemeralKeys, innerMemo] = c;
@@ -90,6 +97,8 @@ export async function handleCommitmentBatch(e: EvmProcessorLog, ctx: DataHandler
         hash, 
         ciphertext: innerCiphertexts,
     }
+
+    // return output;
 
     // console.log('data', data as CommitmentBatch)
 
@@ -148,7 +157,28 @@ export async function handleGeneratedCommitmentBatch(
     commitmentPreImages: Array<CommitmentPreimage>
 }> {
     const data = events.GeneratedCommitmentBatch.decode(e);
-    const commitments = data.commitments;
+
+    const [treeNumber, startPosition, commitments, encryptedRandom] = data;
+
+    const innerCommitments = commitments.map(c=>{
+        const [npk, token, value] = c;
+        const { tokenType, tokenAddress, tokenSubID } = token;
+        const tokenData = createToken(tokenType, tokenAddress, tokenSubID);
+        return {
+            npk,
+            token: tokenData,
+            value
+        }
+    })
+
+    const output = {
+        treeNumber,
+        startPosition,
+        commitments: innerCommitments,
+        encryptedRandom
+    }
+    // console.log('generatedCommitment', output)
+    // const commitments = data.commitments;
 
     const tokens = new Map<string, Token>();
     const legacyGeneratedCommitments = new Array<LegacyGeneratedCommitment>();
@@ -208,6 +238,35 @@ export async function handleTransact(e: EvmProcessorLog, ctx: DataHandlerContext
     commitmentCiphertexts: Array<CommitmentCiphertext>
 }> {
     const data = events.Transact.decode(e);
+
+    const [treeNumber, startPosition, hash, ciphertext] = data;
+    const innerCiphertext = ciphertext.map(c=>{
+        const [
+            ciphertext,
+            blindedSenderViewingKey,
+            blindedReceiverViewingKey,
+            annotationData,
+            memo,
+        ] = c;
+
+        return {
+            ciphertext,
+            blindedSenderViewingKey,
+            blindedReceiverViewingKey,
+            annotationData,
+            memo
+        }
+    });
+
+    const output = {
+        treeNumber,
+        startPosition,
+        hash,
+        ciphertext: innerCiphertext
+    }
+
+    // console.log("Transact", output)
+
     const ciphertextStructs = data.ciphertext;
 
     const ciphertexts = new Array<Ciphertext>();
@@ -261,10 +320,22 @@ export function handleUnshield(e: EvmProcessorLog): {
     unshield: Unshield
 } {
     const data = events.Unshield.decode(e);
+
+    const [npk, innerToken, amount, fee] = data;
+    const { tokenType, tokenAddress, tokenSubID } = innerToken;
+    const _token = createBasicToken(tokenType, tokenAddress, tokenSubID);
+
+    const output = {
+        npk, 
+        token: _token,
+        amount,
+        fee
+    }
+    // console.log("UNSHIELD:", output)
     const id = idFromEventLogIndex(e);
 
-    const { tokenType, tokenAddress, tokenSubID } = data.token;
     const token = createToken(tokenType, tokenAddress, tokenSubID);
+    // const { tokenType, tokenAddress, tokenSubID } = data.token;
 
     const unshield = new Unshield({
         id,
@@ -289,13 +360,54 @@ export async function handleShield(e: EvmProcessorLog, ctx: any): Promise<{
     let data = null;
     if (e.topics[0] === events['Shield(uint256,uint256,(bytes32,(uint8,address,uint256),uint120)[],(bytes32[3],bytes32)[],uint256[])'].topic) {
         data = events['Shield(uint256,uint256,(bytes32,(uint8,address,uint256),uint120)[],(bytes32[3],bytes32)[],uint256[])'].decode(e);
+        console.log("USING LATEST SHIELD EVENT")
     }
     else if (e.topics[0] === events['Shield(uint256,uint256,(bytes32,(uint8,address,uint256),uint120)[],(bytes32[3],bytes32)[])'].topic) {
         data = events['Shield(uint256,uint256,(bytes32,(uint8,address,uint256),uint120)[],(bytes32[3],bytes32)[])'].decode(e) // ShieldLegacyPreMar23
     }
     else throw new Error("Undefined shield event");
 
-    const commitments = data.commitments;
+    const [treeNumber, startPosition, commitments, shieldCiphertext, fees] = data;
+
+    const innerCommitments = commitments.map(c=>{
+        const [npk, innerToken, value] = c;
+        const [tokenType, tokenAddress, tokenSubID] = innerToken;
+        const token = createBasicToken(tokenType, tokenAddress, tokenSubID);
+        return {
+            npk,
+            token,
+            value
+        }
+    });
+
+    const innerShieldCiphertexts = shieldCiphertext.map(s=>{
+        const [encryptedBundle, shieldKey, fees] = s;
+        return {
+            encryptedBundle,
+            shieldKey
+        }
+    })
+    const output: {
+        treeNumber: bigint;
+        startPosition: bigint;
+        commitments: {
+            npk: string,
+            token: BasicToken,
+            value: bigint
+        }[];
+        shieldCiphertext: {encryptedBundle: string[], shieldKey: string}[];
+        fees?: bigint | bigint[]
+    } = {
+        treeNumber,
+        startPosition,
+        commitments: innerCommitments,
+        shieldCiphertext: innerShieldCiphertexts,
+    }
+    if(typeof fees !== 'undefined'){
+        output.fees = fees as any
+        console.log("SHIELD", output)
+    }
+
     let tokens = new Map<string, Token>();
     let commitmentPreimages = new Array<CommitmentPreimage>();
     let shieldCommitments = new Array<ShieldCommitment>();

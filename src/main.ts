@@ -82,31 +82,31 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
         }
 
         // Handle call
-        for (let tcs of c.traces) {
-            if (tcs.type != 'call') return;
-            switch (tcs.action.sighash) {
-                case functions['transact((((uint256,uint256),(uint256[2],uint256[2]),(uint256,uint256)),bytes32,bytes32[],bytes32[],(uint16,uint72,uint8,uint64,address,bytes32,(bytes32[4],bytes32,bytes32,bytes,bytes)[]),(bytes32,(uint8,address,uint256),uint120))[])'].sighash:
-                    {
-                        const { tokens, transactions } = await handleTransactionCall(tcs, ctx);
-                        tokens.forEach((values, key) => {
-                            Tokens.set(key, values);
-                        });
-                        Transactions.push(...transactions);
-                        break;
-                    }
-                case functions['transact((((uint256,uint256),(uint256[2],uint256[2]),(uint256,uint256)),uint256,uint256[],uint256[],(uint16,uint8,address,bytes32,(uint256[4],uint256[2],uint256[])[]),(uint256,(uint8,address,uint256),uint120),address)[])'].sighash:
-                    {
-                        const { tokens, transactions } = await handleLegacyTransactionCall(tcs, ctx);
-                        tokens.forEach((values, key) => {
-                            Tokens.set(key, values);
-                        });
-                        Transactions.push(...transactions);
-                        break;
-                    }
-                default:
-                    throw new Error(`Unhandled sighash: ${tcs.action.sighash}`);
-            }
-        }
+        // for (let tcs of c.traces) {
+        //     if (tcs.type != 'call') return;
+        //     switch (tcs.action.sighash) {
+        //         case functions['transact((((uint256,uint256),(uint256[2],uint256[2]),(uint256,uint256)),bytes32,bytes32[],bytes32[],(uint16,uint72,uint8,uint64,address,bytes32,(bytes32[4],bytes32,bytes32,bytes,bytes)[]),(bytes32,(uint8,address,uint256),uint120))[])'].sighash:
+        //             {
+        //                 const { tokens, transactions } = await handleTransactionCall(tcs, ctx);
+        //                 tokens.forEach((values, key) => {
+        //                     Tokens.set(key, values);
+        //                 });
+        //                 Transactions.push(...transactions);
+        //                 break;
+        //             }
+        //         case functions['transact((((uint256,uint256),(uint256[2],uint256[2]),(uint256,uint256)),uint256,uint256[],uint256[],(uint16,uint8,address,bytes32,(uint256[4],uint256[2],uint256[])[]),(uint256,(uint8,address,uint256),uint120),address)[])'].sighash:
+        //             {
+        //                 const { tokens, transactions } = await handleLegacyTransactionCall(tcs, ctx);
+        //                 tokens.forEach((values, key) => {
+        //                     Tokens.set(key, values);
+        //                 });
+        //                 Transactions.push(...transactions);
+        //                 break;
+        //             }
+        //         default:
+        //             throw new Error(`Unhandled sighash: ${tcs.action.sighash}`);
+        //     }
+        // }
     }
 
     if (ENABLE_LOG) {
