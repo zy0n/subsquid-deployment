@@ -1,0 +1,16 @@
+/node_modules
+/lib
+/builds
+/db
+/**Versions.json
+
+# IDE files
+/.idea
+log.txt
+squid.yaml
+squid-*.yaml
+/src/model
+/src/abi
+/build
+
+.env
