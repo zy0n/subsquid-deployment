@@ -2,7 +2,7 @@ import { TypeormDatabase, type Store } from '@subsquid/typeorm-store'
 import { processor } from './processor'
 import { events, functions } from './abi/RailgunSmartWallet'
 // import { Ciphertext, CommitmentCiphertext, CommitmentPreimage, LegacyCommitmentCiphertext, LegacyEncryptedCommitment, LegacyGeneratedCommitment, Nullifier, ShieldCommitment, Token, TransactCommitment, Transaction, Unshield } from './model';
-import { entityIdFromBlockIndex, generateAction, generateTransaction, handleCommitmentBatch, handleGeneratedCommitmentBatch, handleNullifier, handleShield, handleTransact, handleUnshield } from './railgun-smart-wallet-events';
+import { entityIdFromBlockIndex, generateTransaction, handleCommitmentBatch, handleGeneratedCommitmentBatch, handleNullifier, handleShield, handleTransact, handleUnshield } from './railgun-smart-wallet-events';
 import { EvmProcessorLog } from './evm-log';
 // import { handleLegacyTransactionCall, handleTransactionCall } from './railgun-smart-wallet-call';
 import { Action, ActionStream, CommitmentBatch, CommitmentBatchCiphertext, EVMTransaction, GeneratedCommitmentBatch, GeneratedCommitmentBatchCommitment, Nullifier, ShieldCiphertext, ShieldCommitment, TransactCiphertext, type Shield, type Transact, type Unshield } from './model';
@@ -14,33 +14,6 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
   const contractAddress = (process.env.RAILGUN_PROXY_CONTRACT_ADDRESS || '').toLowerCase();
   if (contractAddress.length == 0)
     throw new Error("Invalid contract address");
-
-  // let Nullifiers = new Array<Nullifier>();
-  // let CommitmentBatches = new Array<CommitmentBatch>();
-  // let CommitmentBatchCiphertexts = new Array<CommitmentBatchCiphertext>();
-  // let GeneratedCommitmentBatches = new Array<GeneratedCommitmentBatch>();
-  // let GeneratedCommitmentBatchCommitments = new Array<GeneratedCommitmentBatchCommitment>();
-  // let Transacts = new Array<Transact>()
-  // let TransactCiphertexts = new Array<TransactCiphertext>();
-  // let Unshields = new Array<Unshield>();
-  // let Shields = new Array<Shield>();
-  // let ShieldCiphertexts = new Array<ShieldCiphertext>();
-  // let ShieldCommitments = new Array<ShieldCommitment>();
-
-  // let Transactions = new Array<EVMTransaction>();
-
-
-  // let LegacyCommitmentCiphertexts = new Array<LegacyCommitmentCiphertext>();
-  // let LegacyEncrpytedCommitments = new Array<LegacyEncryptedCommitment>();
-  // let TransactCommitments = new Array<TransactCommitment>();
-  // let CommitmentCiphertexts = new Array<CommitmentCiphertext>();
-  // let Unshields = new Array<Unshield>();
-  // let Tokens = new Map<string, Token>();
-  // let ShieldCommitments = new Array<ShieldCommitment>();
-  // let CommitmentPreimages = new Array<CommitmentPreimage>();
-  // let LegacyGeneratedCommitments = new Array<LegacyGeneratedCommitment>();
-  // let Transactions = new Array<Transaction>();
-
 
   for (let c of ctx.blocks) {
     // Handle events

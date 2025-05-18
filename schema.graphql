@@ -122,11 +122,11 @@ type Unshield @entity {
   fee: BigInt!
 }
 
-type Action @entity @index(fields: ["type"]) @index(fields: ["shield"]) @index(fields: ["transact"]) @index(fields: ["commitmentBatch"]) @index(fields: ["generatedCommitmentBatch"]) @index(fields: ["nullifier"]) @index(fields: ["unshield"]) {
+type Action @entity @index(fields: ["eventLogIndex"]) @index(fields: ["type"]) @index(fields: ["shield"]) @index(fields: ["transact"]) @index(fields: ["commitmentBatch"]) @index(fields: ["generatedCommitmentBatch"]) @index(fields: ["nullifier"]) @index(fields: ["unshield"]) {
   id: ID!
   type: ActionType!
   transaction: EVMTransaction!
-
+  eventLogIndex: Int!
   commitmentBatch: CommitmentBatch
   generatedCommitmentBatch: GeneratedCommitmentBatch
   shield: Shield

@@ -1,0 +1,75 @@
+query MyQuery {
+  actionStreams {
+    blockNumber
+    transactions {
+      actions {
+        type
+        eventLogIndex
+        railgunBatchIndex
+        railgunTxidIndex
+        commitmentBatch {
+          treeNumber
+          startPosition
+          hash
+          ciphertext {
+            ciphertext
+            ephemeralKeys
+            memo
+          }
+        }
+        generatedCommitmentBatch {
+          treeNumber
+          startPosition
+          commitments {
+            npk
+            token {
+              tokenAddress
+            }
+            value
+          }
+          encryptedRandom
+        }
+        shield {
+          treeNumber
+          startPosition
+          commitments {
+            npk
+            token {
+              tokenAddress
+            }
+            value
+          }
+          shieldCiphertext {
+            encryptedBundle
+            shieldKey
+          }
+          fees
+        }
+        transact {
+          treeNumber
+          startPosition
+          hash
+          ciphertext {
+            ciphertext
+            blindedReceiverViewingKey
+            blindedSenderViewingKey
+            annotationData
+            memo
+          }
+        }
+        unshield {
+          npk
+          token {
+            tokenAddress
+          }
+          amount
+          fee
+        }
+        nullifier {
+          treeNumber
+          nullifier
+        }
+      }
+    }
+  }
+}

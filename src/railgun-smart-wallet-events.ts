@@ -68,7 +68,8 @@ export async function getAction (
   const action = new Action({
     id,
     type,
-    transaction
+    transaction,
+    eventLogIndex: e.logIndex
   })
   await ctx.store.save(action)
   return action;
