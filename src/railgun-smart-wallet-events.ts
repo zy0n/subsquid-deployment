@@ -10,7 +10,7 @@ import { createBasicToken, createToken, type BasicToken } from "./token";
 import { getNoteHash } from "./hash";
 import { DataHandlerContext, type BlockData } from "@subsquid/evm-processor";
 import { Store } from "@subsquid/typeorm-store";
-import { CommitmentBatch, CommitmentBatchCiphertext, EVMTransaction, Nullifier, GeneratedCommitmentBatch, GeneratedCommitmentBatchCommitment, Shield, ShieldCiphertext, ShieldCommitment, Transact, TransactCiphertext, Unshield, ActionType, Action } from "./model";
+import { CommitmentBatch, CommitmentBatchCiphertext, EVMTransaction, Nullifier, GeneratedCommitmentBatch, GeneratedCommitmentBatchCommitment, Shield, ShieldCiphertext, ShieldCommitment, Transact, TransactCiphertext, Unshield, ActionType, Action, type ActionStream } from "./model";
 
 export function entityIdFromBlockIndex(
   blockNumber: bigint | number,
@@ -41,15 +41,34 @@ function extractNullifierData(evmLog: any): { treeNumber: bigint, nullifier: big
 export async function generateAction (
   e: BlockData,
   ctx: DataHandlerContext<Store>,
+  type: ActionType,
+  transaction: EVMTransaction,
+  injected: any,
 ){
 
-  const id = entityIdFromBlockIndex(BigInt(e.header.height), 0n, 'action');
+  const id = entityIdFromBlockIndex(BigInt(e.header.height), 0n, `action:${type}`);
+  const action = new Action({
+    ...injected,
+    id,
+    type,
+    transaction
+  })
+  await ctx.store.save(action)
+  return action;
+}
+
+export async function getAction (
+  e: EvmProcessorLog,
+  ctx: DataHandlerContext<Store>,
+  type: ActionType,
+  transaction: EVMTransaction,
+){
+
+  const id = entityIdFromBlockIndex(BigInt(e.block.height), 0n, `action`);
   const action = new Action({
     id,
-    blockNumber: BigInt(e.header.height),
-    blockHash: hexStringToBytes(e.header.hash),
-    blockTimestamp: BigInt(e.header.timestamp),
-    actions: []
+    type,
+    transaction
   })
   await ctx.store.save(action)
   return action;
@@ -58,19 +77,20 @@ export async function generateAction (
 export async function generateTransaction (
   e: EvmProcessorLog,
   ctx: DataHandlerContext<Store>,
-  action: Action
+  action: ActionStream
 ) {
   const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), 'transaction');
   const transaction = new EVMTransaction({
       id,
-      action,
+      actions: [],
       transactionHash: hexStringToBytes(e.transaction.hash),
-      commitmentBatches: [],
-      generatedCommitmentBatches: [],
-      shields: [],
-      transacts: [],
-      nullifiers: [],
-      unshields: []
+      actionStream: action
+      // commitmentBatches: [],
+      // generatedCommitmentBatches: [],
+      // shields: [],
+      // transacts: [],
+      // nullifiers: [],
+      // unshields: []
     })
     await ctx.store.save(transaction)
     return transaction;
@@ -109,9 +129,22 @@ export async function handleNullifier(
       treeNumber,
       nullifier: nullifier.map(bigIntToPaddedBytes)
     })
-    output.transaction.nullifiers.push(output);
+    const action = await getAction(
+      e,
+      ctx,
+      ActionType.Nullifier,
+      transaction,
+   
+    );
+    action.nullifier = output;
+    //new Action({
+    //   id,
+    //   nullifier: output
+    // })
+    output.transaction.actions.push(action);
     await ctx.store.save(transaction)
     await ctx.store.save(output)
+    await ctx.store.save(action);
 
     return {
       nullified: output
@@ -158,9 +191,21 @@ export async function handleCommitmentBatch(
 
     const ciphertexts = await Promise.all(innerCiphertexts);
     commitmentBatch.ciphertext = ciphertexts;
-    commitmentBatch.transaction.commitmentBatches.push(commitmentBatch)
+
+    const action = await getAction(
+      e,
+      ctx,
+      ActionType.CommitmentBatch,
+      transaction,
+  
+    );
+    action.commitmentBatch = commitmentBatch;
+    commitmentBatch.transaction.actions.push(action);
+
+    // commitmentBatch.transaction.commitmentBatches.push(commitmentBatch)
     await ctx.store.save(transaction)
     await ctx.store.save(commitmentBatch)
+    await ctx.store.save(action);
     
     return {
         commitmentBatch,
@@ -208,10 +253,22 @@ export async function handleGeneratedCommitmentBatch(
     })
     const _commitments = await Promise.all(innerCommitments)
     generatedCommitmentBatch.commitments = _commitments
-    generatedCommitmentBatch.transaction.generatedCommitmentBatches.push(generatedCommitmentBatch)
+
+
+    const action = await getAction(
+      e,
+      ctx,
+      ActionType.GeneratedCommitmentBatch,
+      transaction,
+    );
+    action.generatedCommitmentBatch = generatedCommitmentBatch;
+    generatedCommitmentBatch.transaction.actions.push(action);
+
+    // generatedCommitmentBatch.transaction.generatedCommitmentBatches.push(generatedCommitmentBatch)
 
     await ctx.store.save(transaction);
     await ctx.store.save(generatedCommitmentBatch);
+    await ctx.store.save(action)
     return {
       generatedCommitmentBatch,
       commitment: _commitments
@@ -263,9 +320,22 @@ export async function handleTransact(
     });
     const _ciphertext = await  Promise.all(innerCiphertext)
     transact.ciphertext = _ciphertext
-    transact.transaction.transacts.push(transact)
+
+    
+    const action = await getAction(
+      e,
+      ctx,
+      ActionType.Transact,
+      transaction,
+     
+    );
+    action.transact = transact;
+    transact.transaction.actions.push(action);
+    // transact.transaction.transacts.push(transact)
     await ctx.store.save(transaction);
     await ctx.store.save(transact)
+    await ctx.store.save(action)
+
     return {
       transact,
       ciphertext: _ciphertext
@@ -297,9 +367,19 @@ export async function handleUnshield(
       amount,
       fee
     })
-    unshield.transaction.unshields.push(unshield)
+
+    const action = await getAction(
+      e,
+      ctx,
+      ActionType.Unshield,
+      transaction,
+    );
+    action.unshield = unshield;
+    unshield.transaction.actions.push(action);
+    // unshield.transaction.unshields.push(unshield)
     await ctx.store.save(transaction)
     await ctx.store.save(unshield)
+    await ctx.store.save(action)
 
     return {
       unshield
@@ -365,9 +445,6 @@ export async function handleShield(
         return ciphertext;
     })
 
-
-
-
     if(typeof fees !== 'undefined'){
       // fix this to be auto array
       if(Array.isArray(fees)){
@@ -384,10 +461,21 @@ export async function handleShield(
     const _ciphertexts = await Promise.all(innerShieldCiphertexts);
     shield.commitments = _commitments
     shield.shieldCiphertext = _ciphertexts
-    shield.transaction.shields.push(shield)
+
+    const action = await getAction(
+      e,
+      ctx,
+      ActionType.Shield,
+      transaction,
+    );
+    action.shield = shield;
+    shield.transaction.actions.push(action);
+    // shield.transaction.shields.push(shield)
 
     await ctx.store.save(transaction)
     await ctx.store.save(shield);
+    await ctx.store.save(action);
+
     return {
       shield,
       ciphertext: _ciphertexts,

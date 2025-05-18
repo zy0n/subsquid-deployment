@@ -2,10 +2,11 @@ import { TypeormDatabase } from '@subsquid/typeorm-store'
 import { processor } from './processor'
 import { events, functions } from './abi/RailgunSmartWallet'
 // import { Ciphertext, CommitmentCiphertext, CommitmentPreimage, LegacyCommitmentCiphertext, LegacyEncryptedCommitment, LegacyGeneratedCommitment, Nullifier, ShieldCommitment, Token, TransactCommitment, Transaction, Unshield } from './model';
-import { generateAction, generateTransaction, handleCommitmentBatch, handleGeneratedCommitmentBatch, handleNullifier, handleShield, handleTransact, handleUnshield } from './railgun-smart-wallet-events';
+import { entityIdFromBlockIndex, generateAction, generateTransaction, handleCommitmentBatch, handleGeneratedCommitmentBatch, handleNullifier, handleShield, handleTransact, handleUnshield } from './railgun-smart-wallet-events';
 import { EvmProcessorLog } from './evm-log';
 // import { handleLegacyTransactionCall, handleTransactionCall } from './railgun-smart-wallet-call';
-import { CommitmentBatch, CommitmentBatchCiphertext, EVMTransaction, GeneratedCommitmentBatch, GeneratedCommitmentBatchCommitment, Nullifier, ShieldCiphertext, ShieldCommitment, TransactCiphertext, type Shield, type Transact, type Unshield } from './model';
+import { ActionStream, CommitmentBatch, CommitmentBatchCiphertext, EVMTransaction, GeneratedCommitmentBatch, GeneratedCommitmentBatchCommitment, Nullifier, ShieldCiphertext, ShieldCommitment, TransactCiphertext, type Shield, type Transact, type Unshield } from './model';
+import { hexStringToBytes } from './utils';
 
 const ENABLE_LOG = false;
 
@@ -43,14 +44,20 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
 
   for (let c of ctx.blocks) {
     // Handle events
-    const action = await generateAction(c, ctx);
+    const actionStream = new ActionStream({
+      id: entityIdFromBlockIndex(BigInt(c.header.height), 0n, 'actionStream' ),
+      blockNumber: BigInt(c.header.height),
+      blockHash: hexStringToBytes(c.header.hash),
+      transactions: []
+    })
+    await ctx.store.save(actionStream);
     for (let evt of c.logs) {
       if (evt.address.toLowerCase() !== contractAddress) continue;
 
       const e = evt as EvmProcessorLog;
 
 
-      const transaction = await generateTransaction(e, ctx, action);
+      const transaction = await generateTransaction(e, ctx, actionStream);
       switch (e.topics[0]) {
         case events.Nullified.topic:
         case events.Nullifiers.topic:
@@ -93,8 +100,8 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
           } break;
       }
       Transactions.push(transaction)
-      action.actions.push(transaction)
-      await ctx.store.save(action)
+      actionStream.transactions.push(transaction)
+      await ctx.store.save(actionStream)
     }
 
     // Handle call
