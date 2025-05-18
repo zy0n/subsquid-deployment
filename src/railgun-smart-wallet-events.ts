@@ -10,7 +10,7 @@ import { createBasicToken, createToken, type BasicToken } from "./token";
 import { getNoteHash } from "./hash";
 import { DataHandlerContext } from "@subsquid/evm-processor";
 import { Store } from "@subsquid/typeorm-store";
-import { CommitmentBatch, CommitmentBatchCiphertext, EVMTransaction, Nullifier, GeneratedCommitmentBatch, GeneratedCommitmentBatchCommitment, Transact, TransactCiphertext, Unshield, type Shield, type ShieldCiphertext, type ShieldCommitment } from "./model";
+import { CommitmentBatch, CommitmentBatchCiphertext, EVMTransaction, Nullifier, GeneratedCommitmentBatch, GeneratedCommitmentBatchCommitment, Shield, ShieldCiphertext, ShieldCommitment, Transact, TransactCiphertext, Unshield } from "./model";
 
 function extractNullifierData(evmLog: any): { treeNumber: bigint, nullifier: bigint[] } {
     if (evmLog.topics[0] === events.Nullified.topic) {
@@ -463,8 +463,8 @@ export async function handleShield(e: EvmProcessorLog, ctx: any): Promise<{
     // shieldCommitments: Array<ShieldCommitment>
 
     shield: Shield
-    ciphertext: ShieldCiphertext
-    commitment: ShieldCommitment
+    ciphertext: Array<ShieldCiphertext>
+    commitment: Array<ShieldCommitment>
 }> {
     let data = null;
     if (e.topics[0] === events['Shield(uint256,uint256,(bytes32,(uint8,address,uint256),uint120)[],(bytes32[3],bytes32)[],uint256[])'].topic) {
@@ -476,102 +476,135 @@ export async function handleShield(e: EvmProcessorLog, ctx: any): Promise<{
     }
     else throw new Error("Undefined shield event");
 
+    const transaction = generateTransaction(e)
     const [treeNumber, startPosition, commitments, shieldCiphertext, fees] = data;
+
+    const shield = new Shield({
+      treeNumber,
+      startPosition,
+      transaction
+    })
+
 
     const innerCommitments = commitments.map(c=>{
         const [npk, innerToken, value] = c;
         const [tokenType, tokenAddress, tokenSubID] = innerToken;
-        const token = createBasicToken(tokenType, tokenAddress, tokenSubID);
-        return {
-            npk,
+        const token = createToken(tokenType, tokenAddress, tokenSubID);
+        return new ShieldCommitment({
+            shield,
+            npk: BigInt(npk), // TODO: Bytes?
             token,
             value
-        }
+        })
     });
 
     const innerShieldCiphertexts = shieldCiphertext.map(s=>{
-        const [encryptedBundle, shieldKey, fees] = s;
-        return {
-            encryptedBundle,
-            shieldKey
-        }
+        const [encryptedBundle, shieldKey] = s;
+        return new ShieldCiphertext({
+            shield,
+            encryptedBundle: encryptedBundle.map(hexStringToBytes),
+            shieldKey: BigInt(shieldKey)
+        })
     })
-    const output: {
-        treeNumber: bigint;
-        startPosition: bigint;
-        commitments: {
-            npk: string,
-            token: BasicToken,
-            value: bigint
-        }[];
-        shieldCiphertext: {encryptedBundle: string[], shieldKey: string}[];
-        fees?: bigint | bigint[]
-    } = {
-        treeNumber,
-        startPosition,
-        commitments: innerCommitments,
-        shieldCiphertext: innerShieldCiphertexts,
-    }
+
+
+
+    // const output: {
+    //     treeNumber: bigint;
+    //     startPosition: bigint;
+    //     commitments: {
+    //         npk: string,
+    //         token: BasicToken,
+    //         value: bigint
+    //     }[];
+    //     shieldCiphertext: {encryptedBundle: string[], shieldKey: string}[];
+    //     fees?: bigint | bigint[]
+    // } = {
+    //     treeNumber,
+    //     startPosition,
+    //     commitments: innerCommitments,
+    //     shieldCiphertext: innerShieldCiphertexts,
+    // }
+
     if(typeof fees !== 'undefined'){
-        output.fees = fees as any
-        console.log("SHIELD", output)
+      // fix this to be auto array
+      if(Array.isArray(fees)){
+        const feeArr = fees as bigint[]
+        shield.fees = feeArr.map(e=>bigIntToPaddedBytes(e))
+      } else {
+        shield.fees = [bigIntToPaddedBytes(fees)]
+      }
+        // output.fees = fees as any
+        // console.log("SHIELD", output)
     }
 
-    let tokens = new Map<string, Token>();
-    let commitmentPreimages = new Array<CommitmentPreimage>();
-    let shieldCommitments = new Array<ShieldCommitment>();
 
-    for (let i = 0; i < commitments.length; i++) {
-        const commitment = commitments[i];
+    shield.commitments = innerCommitments
+    shield.shieldCiphertext = innerShieldCiphertexts
+    shield.transaction.shields.push(shield)
 
-        const treePosition = data.startPosition + BigInt(i)
-        const id = idFrom2PaddedBigInts(data.treeNumber, treePosition);
-
-        const { tokenType, tokenAddress, tokenSubID } = commitment.token;
-        const token = createToken(tokenType, tokenAddress, tokenSubID);
-        tokens.set(token.id, token);
-
-        const preimage = new CommitmentPreimage({
-            id,
-            npk: hexStringToBytes(commitment.npk),
-            token,
-            value: commitment.value
-        });
-        commitmentPreimages.push(preimage);
-
-        const commitmentHash = await getNoteHash(
-            ctx,
-            BigInt(commitment.npk),
-            BigInt(token.id),
-            commitment.value,
-        );
-
-        // fee is not present in new LegacyShield
-        const fee = (data as any).fees ? (data as any).fees[i] : null;
-        const encryptedBundle = data.shieldCiphertext[i].encryptedBundle.map(bundle => bigIntToPad32Bytes(BigInt(bundle)));
-        const shieldCommitment = new ShieldCommitment({
-            id,
-            blockNumber: BigInt(e.block.height),
-            blockTimestamp: BigInt(e.block.timestamp) / 1000n,
-            transactionHash: hexStringToBytes(e.transaction.hash),
-            treeNumber: Number(data.treeNumber),
-            batchStartTreePosition: Number(data.startPosition),
-            treePosition: Number(treePosition),
-            commitmentType: CommitmentType.ShieldCommitment,
-            hash: commitmentHash as bigint,
-            preimage,
-            encryptedBundle,
-            shieldKey: hexStringToBytes(data.shieldCiphertext[i].shieldKey),
-            fee
-        });
-        shieldCommitments.push(shieldCommitment);
-    }
 
     return {
-        tokens,
-        commitmentPreimages,
-        shieldCommitments
-    };
+      shield,
+      ciphertext: innerShieldCiphertexts,
+      commitment: innerCommitments
+    }
+
+    // let tokens = new Map<string, Token>();
+    // let commitmentPreimages = new Array<CommitmentPreimage>();
+    // let shieldCommitments = new Array<ShieldCommitment>();
+
+    // for (let i = 0; i < commitments.length; i++) {
+    //     const commitment = commitments[i];
+
+    //     const treePosition = data.startPosition + BigInt(i)
+    //     const id = idFrom2PaddedBigInts(data.treeNumber, treePosition);
+
+    //     const { tokenType, tokenAddress, tokenSubID } = commitment.token;
+    //     const token = createToken(tokenType, tokenAddress, tokenSubID);
+    //     tokens.set(token.id, token);
+
+    //     const preimage = new CommitmentPreimage({
+    //         id,
+    //         npk: hexStringToBytes(commitment.npk),
+    //         token,
+    //         value: commitment.value
+    //     });
+    //     commitmentPreimages.push(preimage);
+
+    //     const commitmentHash = await getNoteHash(
+    //         ctx,
+    //         BigInt(commitment.npk),
+    //         BigInt(token.id),
+    //         commitment.value,
+    //     );
+
+    //     // fee is not present in new LegacyShield
+    //     const fee = (data as any).fees ? (data as any).fees[i] : null;
+    //     const encryptedBundle = data.shieldCiphertext[i].encryptedBundle.map(bundle => bigIntToPad32Bytes(BigInt(bundle)));
+    //     const shieldCommitment = new ShieldCommitment({
+    //         id,
+    //         blockNumber: BigInt(e.block.height),
+    //         blockTimestamp: BigInt(e.block.timestamp) / 1000n,
+    //         transactionHash: hexStringToBytes(e.transaction.hash),
+    //         treeNumber: Number(data.treeNumber),
+    //         batchStartTreePosition: Number(data.startPosition),
+    //         treePosition: Number(treePosition),
+    //         commitmentType: CommitmentType.ShieldCommitment,
+    //         hash: commitmentHash as bigint,
+    //         preimage,
+    //         encryptedBundle,
+    //         shieldKey: hexStringToBytes(data.shieldCiphertext[i].shieldKey),
+    //         fee
+    //     });
+    //     shieldCommitments.push(shieldCommitment);
+    // }
+
+    // return {
+    //     tokens,
+    //     commitmentPreimages,
+    //     shieldCommitments
+    // };
 }
 
 /*
