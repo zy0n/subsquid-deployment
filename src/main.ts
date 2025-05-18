@@ -48,11 +48,11 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
 
       const e = evt as EvmProcessorLog;
 
-      const transaction = generateTransaction(e, ctx);
+      const transaction = await generateTransaction(e, ctx);
       switch (e.topics[0]) {
         case events.Nullified.topic:
         case events.Nullifiers.topic:
-          const extractedNullifier = handleNullifier(e, ctx, transaction)
+          const extractedNullifier = await handleNullifier(e, ctx, transaction)
           Nullifiers.push(extractedNullifier.nullified)
           break;
         case events.CommitmentBatch.topic: 
