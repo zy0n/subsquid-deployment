@@ -7,7 +7,8 @@
     "process": "sqd down && sqd up && sqd process",
     "compile-chain": "ts-node compile.ts",
     "test": "mocha --require ts-node/register src/test/**.spec.ts",
-    "deploy:hard-reset": "sqd deploy --hard-reset"
+    "deploy:hard-reset": "sqd deploy --hard-reset",
+    "dev": "sqd down && sqd up && sqd codegen && sqd migration:generate && sqd process"
   },
   "dependencies": {
     "@subsquid/archive-registry": "3.3.0",

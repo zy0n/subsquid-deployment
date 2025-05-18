@@ -4,8 +4,8 @@ import { events, functions } from './abi/RailgunSmartWallet'
 // import { Ciphertext, CommitmentCiphertext, CommitmentPreimage, LegacyCommitmentCiphertext, LegacyEncryptedCommitment, LegacyGeneratedCommitment, Nullifier, ShieldCommitment, Token, TransactCommitment, Transaction, Unshield } from './model';
 import { generateTransaction, handleCommitmentBatch, handleGeneratedCommitmentBatch, handleNullifier, handleShield, handleTransact, handleUnshield } from './railgun-smart-wallet-events';
 import { EvmProcessorLog } from './evm-log';
-import { handleLegacyTransactionCall, handleTransactionCall } from './railgun-smart-wallet-call';
-import { CommitmentBatch, Nullifier, type CommitmentBatchCiphertext } from './model';
+// import { handleLegacyTransactionCall, handleTransactionCall } from './railgun-smart-wallet-call';
+import { CommitmentBatch, CommitmentBatchCiphertext, EVMTransaction, GeneratedCommitmentBatch, GeneratedCommitmentBatchCommitment, Nullifier, ShieldCiphertext, ShieldCommitment, TransactCiphertext, type Shield, type Transact, type Unshield } from './model';
 
 const ENABLE_LOG = false;
 
@@ -15,8 +15,20 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
     throw new Error("Invalid contract address");
 
   let Nullifiers = new Array<Nullifier>();
-  let CommitmentBatch = new Array<CommitmentBatch>();
-  let CommitmentBatchCiphertext = new Array<CommitmentBatchCiphertext>();
+  let CommitmentBatches = new Array<CommitmentBatch>();
+  let CommitmentBatchCiphertexts = new Array<CommitmentBatchCiphertext>();
+  let GeneratedCommitmentBatches = new Array<GeneratedCommitmentBatch>();
+  let GeneratedCommitmentBatchCommitments = new Array<GeneratedCommitmentBatchCommitment>();
+  let Transacts = new Array<Transact>()
+  let TransactCiphertexts = new Array<TransactCiphertext>();
+  let Unshields = new Array<Unshield>();
+  let Shields = new Array<Shield>();
+  let ShieldCiphertexts = new Array<ShieldCiphertext>();
+  let ShieldCommitments = new Array<ShieldCommitment>();
+
+  let Transactions = new Array<EVMTransaction>();
+
+
   // let LegacyCommitmentCiphertexts = new Array<LegacyCommitmentCiphertext>();
   // let LegacyEncrpytedCommitments = new Array<LegacyEncryptedCommitment>();
   // let TransactCommitments = new Array<TransactCommitment>();
@@ -37,7 +49,6 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
       const e = evt as EvmProcessorLog;
 
       const transaction = generateTransaction(e);
-
       switch (e.topics[0]) {
         case events.Nullified.topic:
         case events.Nullifiers.topic:
@@ -46,45 +57,40 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
           break;
         case events.CommitmentBatch.topic: 
           {
-            const { commitmentBatch, ciphertext } = await handleCommitmentBatch(e, ctx, transaction);
-            CommitmentBatch.push(commitmentBatch)
-            CommitmentBatchCiphertext.push(...ciphertext)
+            const { commitmentBatch, ciphertext } = await handleCommitmentBatch(e, transaction);
+            CommitmentBatches.push(commitmentBatch)
+            CommitmentBatchCiphertexts.push(...ciphertext)
           }
           break;
         case events.GeneratedCommitmentBatch.topic:
           {
-            const { tokens, legacyGeneratedCommitments, commitmentPreImages } = await handleGeneratedCommitmentBatch(e, ctx, transaction);
-            tokens.forEach((values, key) => {
-              Tokens.set(key, values);
-            });
-            LegacyGeneratedCommitments.push(...legacyGeneratedCommitments);
-            CommitmentPreimages.push(...commitmentPreImages);
+            const { generatedCommitmentBatch, commitment } = await handleGeneratedCommitmentBatch(e, transaction);
+          
+            GeneratedCommitmentBatches.push(generatedCommitmentBatch);
+            GeneratedCommitmentBatchCommitments.push(...commitment);
           } break;
         case events.Transact.topic:
           {
-            const { ciphertexts, transactCommitments, commitmentCiphertexts } = await handleTransact(e, ctx);
-            CipherTexts.push(...ciphertexts);
-            TransactCommitments.push(...transactCommitments);
-            CommitmentCiphertexts.push(...commitmentCiphertexts);
+            const { transact, ciphertext } = await handleTransact(e, transaction);
+            Transacts.push(transact);
+            TransactCiphertexts.push(...ciphertext)
           }
           break;
         case events.Unshield.topic:
           {
-            const { unshield, token } = handleUnshield(e)
+            const { unshield } = handleUnshield(e, transaction)
             Unshields.push(unshield);
-            Tokens.set(token.id, token);
           } break;
         case events['Shield(uint256,uint256,(bytes32,(uint8,address,uint256),uint120)[],(bytes32[3],bytes32)[])'].topic:
         case events['Shield(uint256,uint256,(bytes32,(uint8,address,uint256),uint120)[],(bytes32[3],bytes32)[],uint256[])'].topic:
           {
-            const { tokens, shieldCommitments, commitmentPreimages } = await handleShield(e, ctx);
-            ShieldCommitments.push(...shieldCommitments);
-            CommitmentPreimages.push(...commitmentPreimages);
-            tokens.forEach((values, key) => {
-              Tokens.set(key, values);
-            });
+            const { shield, commitment, ciphertext } = await handleShield(e, transaction);
+            Shields.push(shield)
+            ShieldCommitments.push(...commitment);
+            ShieldCiphertexts.push(...ciphertext)
           } break;
       }
+      Transactions.push(transaction)
     }
 
     // Handle call
@@ -115,45 +121,51 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
     // }
   }
 
-  if (ENABLE_LOG) {
+  if (true) {
     console.log("Inserting data...");
     console.table({
       Nullifier: Nullifiers.length,
-      CipherText: CipherTexts.length,
-      LegacyCommitmentCiphertext: LegacyCommitmentCiphertexts.length,
-      LegacyEncrpytedCommitment: LegacyEncrpytedCommitments.length,
-      TransactCommitment: TransactCommitments.length,
-      CommitmentCiphertext: CommitmentCiphertexts.length,
-      Token: Tokens.size,
+      CommitmentBatch: CommitmentBatches.length,
+      CommitmentBatchCiphertext: CommitmentBatchCiphertexts.length,
+      GeneratedCommitmentBatch: GeneratedCommitmentBatches.length,
+      GeneratedCommitmentBatchCommitment: GeneratedCommitmentBatchCommitments.length,
+      Transact: Transacts.length,
+      TransactCiphertext: TransactCiphertexts.length,
       Unshield: Unshields.length,
-      CommitmentPreImage: CommitmentPreimages.length,
+      Shield: Shields.length,
+      ShieldCiphertext: ShieldCiphertexts.length,
       ShieldCommitment: ShieldCommitments.length,
-      LegacyGeneratedCommitment: LegacyGeneratedCommitments.length
+      Transaction: Transactions.length
     });
   }
 
+// base records that other tables depend on
+  // Step 1: Ciphertexts and other non-dependent base entries
   await Promise.all([
     ctx.store.upsert(Nullifiers),
-    ctx.store.upsert(CipherTexts),
-    ctx.store.upsert(LegacyCommitmentCiphertexts),
-    ctx.store.upsert([...Tokens.values()]),
+    ctx.store.upsert(TransactCiphertexts),
+    ctx.store.upsert(ShieldCiphertexts),
+    ctx.store.upsert(CommitmentBatchCiphertexts),
   ]);
 
-
-  // LegacyEncrpyedCommitments is dependent on legacyCommitmentCipherTexts
-  // Inserting at the same time doesn't work as foreign key is not found
+  // Step 2: Primary batches that are required by commitments
   await Promise.all([
-    ctx.store.upsert(LegacyEncrpytedCommitments),
-    ctx.store.upsert(CommitmentCiphertexts),
+    ctx.store.upsert(GeneratedCommitmentBatches), // ✅ must come before GCBCommitments
+    ctx.store.upsert(CommitmentBatches),
+  ]);
+
+  // Step 3: Commitment records that rely on batches
+  await Promise.all([
+    ctx.store.upsert(GeneratedCommitmentBatchCommitments),
+    ctx.store.upsert(ShieldCommitments), // Assumes ShieldCiphertexts already inserted
+  ]);
+
+  // Step 4: Operations
+  await Promise.all([
+    ctx.store.upsert(Shields),
     ctx.store.upsert(Unshields),
-    ctx.store.upsert(CommitmentPreimages),
-    ctx.store.upsert(Transactions)
-  ]);
-
-  await Promise.all([
-    ctx.store.upsert(TransactCommitments),
-    ctx.store.upsert(ShieldCommitments),
-    ctx.store.upsert(LegacyGeneratedCommitments)
+    ctx.store.upsert(Transactions),
+    ctx.store.upsert(Transacts),
   ]);
 
 })

@@ -19,7 +19,10 @@ export function entityIdFromBlockIndex(
 ): string {
   const pad = (x: bigint | number) => BigInt(x).toString(16).padStart(64, '0')
   const id = `${pad(blockNumber)}${pad(txIndex)}`
-  return prefix ? `${prefix}:${id}` : id
+  const output =  prefix ? `${prefix}:${id}` : id;
+  console.log('OUTPUT', output)
+
+  return output
 }
 
 function extractNullifierData(evmLog: any): { treeNumber: bigint, nullifier: bigint[] } {
@@ -261,10 +264,10 @@ export async function handleGeneratedCommitmentBatch(
             value
         })
     })
-    console.log(generatedCommitmentBatch)
-
+    
     generatedCommitmentBatch.commitments = innerCommitments
     generatedCommitmentBatch.transaction.generatedCommitmentBatches.push(generatedCommitmentBatch)
+    console.log(generatedCommitmentBatch)
 
 
     return {
