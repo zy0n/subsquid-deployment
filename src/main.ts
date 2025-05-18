@@ -48,43 +48,43 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
 
       const e = evt as EvmProcessorLog;
 
-      const transaction = generateTransaction(e);
+      const transaction = generateTransaction(e, ctx);
       switch (e.topics[0]) {
         case events.Nullified.topic:
         case events.Nullifiers.topic:
-          const extractedNullifier = handleNullifier(e, transaction)
+          const extractedNullifier = handleNullifier(e, ctx, transaction)
           Nullifiers.push(extractedNullifier.nullified)
           break;
         case events.CommitmentBatch.topic: 
           {
-            const { commitmentBatch, ciphertext } = await handleCommitmentBatch(e, transaction);
+            const { commitmentBatch, ciphertext } = await handleCommitmentBatch(e, ctx, transaction);
             CommitmentBatches.push(commitmentBatch)
             CommitmentBatchCiphertexts.push(...ciphertext)
           }
           break;
         case events.GeneratedCommitmentBatch.topic:
           {
-            const { generatedCommitmentBatch, commitment } = await handleGeneratedCommitmentBatch(e, transaction);
+            const { generatedCommitmentBatch, commitment } = await handleGeneratedCommitmentBatch(e, ctx, transaction);
           
             GeneratedCommitmentBatches.push(generatedCommitmentBatch);
             GeneratedCommitmentBatchCommitments.push(...commitment);
           } break;
         case events.Transact.topic:
           {
-            const { transact, ciphertext } = await handleTransact(e, transaction);
+            const { transact, ciphertext } = await handleTransact(e, ctx, transaction);
             Transacts.push(transact);
             TransactCiphertexts.push(...ciphertext)
           }
           break;
         case events.Unshield.topic:
           {
-            const { unshield } = handleUnshield(e, transaction)
+            const { unshield } = handleUnshield(e, ctx, transaction)
             Unshields.push(unshield);
           } break;
         case events['Shield(uint256,uint256,(bytes32,(uint8,address,uint256),uint120)[],(bytes32[3],bytes32)[])'].topic:
         case events['Shield(uint256,uint256,(bytes32,(uint8,address,uint256),uint120)[],(bytes32[3],bytes32)[],uint256[])'].topic:
           {
-            const { shield, commitment, ciphertext } = await handleShield(e, transaction);
+            const { shield, commitment, ciphertext } = await handleShield(e, ctx, transaction);
             Shields.push(shield)
             ShieldCommitments.push(...commitment);
             ShieldCiphertexts.push(...ciphertext)

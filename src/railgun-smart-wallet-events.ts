@@ -40,7 +40,8 @@ function extractNullifierData(evmLog: any): { treeNumber: bigint, nullifier: big
 }
 
 export function generateTransaction (
-  e: EvmProcessorLog
+  e: EvmProcessorLog,
+  ctx: DataHandlerContext<Store>,
 ) {
   const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), 'transaction');
 
@@ -77,6 +78,7 @@ export function generateTransaction (
 
 export function handleNullifier(
   e: EvmProcessorLog, 
+  ctx: DataHandlerContext<Store>,
   transaction: EVMTransaction
 ): {
   nullified: Nullifier
@@ -124,6 +126,7 @@ export function handleNullifier(
 
 export async function handleCommitmentBatch(
   e: EvmProcessorLog, 
+  ctx: DataHandlerContext<Store>,
   transaction: EVMTransaction
 ): Promise<{
     commitmentBatch: CommitmentBatch
@@ -228,6 +231,7 @@ export async function handleCommitmentBatch(
 
 export async function handleGeneratedCommitmentBatch(
   e: EvmProcessorLog,
+  ctx: DataHandlerContext<Store>,
   transaction: EVMTransaction
 ): Promise<{
   generatedCommitmentBatch: GeneratedCommitmentBatch
@@ -338,6 +342,7 @@ export async function handleGeneratedCommitmentBatch(
 
 export async function handleTransact(
   e: EvmProcessorLog, 
+  ctx: DataHandlerContext<Store>,
   transaction: EVMTransaction
 ): Promise<{
     transact: Transact,
@@ -447,6 +452,7 @@ export async function handleTransact(
 
 export function handleUnshield(
   e: EvmProcessorLog,
+  ctx: DataHandlerContext<Store>,
   transaction: EVMTransaction
 ): {
     unshield: Unshield
@@ -504,6 +510,7 @@ export function handleUnshield(
 
 export async function handleShield(
   e: EvmProcessorLog,
+  ctx: DataHandlerContext<Store>,
   transaction: EVMTransaction
 ): Promise<{
     // tokens: Map<string, Token>,
