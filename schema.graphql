@@ -1,3 +1,5 @@
+# TODO: [Bytes!]! maybe change to [String!]! ?
+
 enum ActionType {
   CommitmentBatch
   GeneratedCommitmentBatch
@@ -22,15 +24,15 @@ type Token @entity {
 
 type CommitmentBatchCiphertext @entity {
   id: ID!
-  batch: CommitmentBatch! # ✅ Parent ref
-  ciphertext: [BigInt!]!
-  ephemeralKeys: [BigInt!]!
-  memo: [BigInt!]!
+  batch: CommitmentBatch!
+  ciphertext: [Bytes!]!
+  ephemeralKeys: [Bytes!]!
+  memo: [Bytes!]!
 }
 
 type GeneratedCommitmentBatchCommitment @entity {
   id: ID!
-  batch: GeneratedCommitmentBatch! # ✅ Parent ref
+  batch: GeneratedCommitmentBatch!
   npk: BigInt!
   token: Token!
   value: BigInt!
@@ -38,7 +40,7 @@ type GeneratedCommitmentBatchCommitment @entity {
 
 type ShieldCommitment @entity {
   id: ID!
-  shield: Shield! # ✅ Parent ref
+  shield: Shield!
   npk: BigInt!
   token: Token!
   value: BigInt!
@@ -46,110 +48,102 @@ type ShieldCommitment @entity {
 
 type ShieldCiphertext @entity {
   id: ID!
-  shield: Shield! # ✅ Parent ref
-  encryptedBundle: [BigInt!]!
+  shield: Shield!
+  encryptedBundle: [Bytes!]!
   shieldKey: BigInt!
 }
 
 type TransactCiphertext @entity {
   id: ID!
-  transact: Transact! # ✅ Parent ref
-  ciphertext: [BigInt!]!
+  transact: Transact!
+  ciphertext: [Bytes!]!
   blindedSenderViewingKey: BigInt!
   blindedReceiverViewingKey: BigInt!
   annotationData: BigInt!
   memo: BigInt!
 }
 
-interface Action {
-  id: ID!
-  actionType: ActionType!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  blockHash: Bytes!
-  transactions: [EVMTransaction!]!
-}
-
-type CommitmentBatch implements Action @entity {
-  id: ID!
-  actionType: ActionType!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  blockHash: Bytes!
-  treeNumber: Int!
-  startPosition: Int!
-  hash: [BigInt!]!
-  ciphertext: [CommitmentBatchCiphertext!]! @derivedFrom(field: "batch")
-  transactions: [EVMTransaction!]! @derivedFrom(field: "actions")
-}
-
-type GeneratedCommitmentBatch implements Action @entity {
-  id: ID!
-  actionType: ActionType!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  blockHash: Bytes!
-  treeNumber: Int!
-  startPosition: Int!
-  commitments: [GeneratedCommitmentBatchCommitment!]! @derivedFrom(field: "batch")
-  encryptedRandom: [[BigInt!]!]!
-  transactions: [EVMTransaction!]! @derivedFrom(field: "actions")
-}
-
-type Shield implements Action @entity {
-  id: ID!
-  actionType: ActionType!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  blockHash: Bytes!
-  treeNumber: Int!
-  startPosition: Int!
-  commitments: [ShieldCommitment!]! @derivedFrom(field: "shield")
-  shieldCiphertext: [ShieldCiphertext!]! @derivedFrom(field: "shield")
-  transactions: [EVMTransaction!]! @derivedFrom(field: "actions")
-}
-
-type Transact implements Action @entity {
-  id: ID!
-  actionType: ActionType!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  blockHash: Bytes!
-  treeNumber: Int!
-  startPosition: Int!
-  hash: [BigInt!]!
-  ciphertext: [TransactCiphertext!]! @derivedFrom(field: "transact")
-  railgunBatchIndex: Int!
-  railgunTxidIndex: Int!
-  transactions: [EVMTransaction!]! @derivedFrom(field: "actions")
-}
-
-type Nullifier implements Action @entity {
+type CommitmentBatch @entity {
   id: ID!
   actionType: ActionType!
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   blockHash: Bytes!
   treeNumber: BigInt!
-  nullifier: [BigInt!]!
-  transactions: [EVMTransaction!]! @derivedFrom(field: "actions")
+  startPosition: BigInt!
+  hash: [Bytes!]!
+  transaction: EVMTransaction!
+  ciphertext: [CommitmentBatchCiphertext!]! @derivedFrom(field: "batch")
 }
 
-type Unshield implements Action @entity {
+type GeneratedCommitmentBatch @entity {
   id: ID!
   actionType: ActionType!
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   blockHash: Bytes!
+  treeNumber: BigInt!
+  startPosition: BigInt!
+  transaction: EVMTransaction!
+  commitments: [GeneratedCommitmentBatchCommitment!]! @derivedFrom(field: "batch")
+  encryptedRandom: [[Bytes!]!]!
+}
+
+type Shield @entity {
+  id: ID!
+  actionType: ActionType!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  blockHash: Bytes!
+  treeNumber: BigInt!
+  startPosition: BigInt!
+  transaction: EVMTransaction!
+  commitments: [ShieldCommitment!]! @derivedFrom(field: "shield")
+  shieldCiphertext: [ShieldCiphertext!]! @derivedFrom(field: "shield")
+}
+
+type Transact @entity {
+  id: ID!
+  actionType: ActionType!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  blockHash: Bytes!
+  treeNumber: BigInt!
+  startPosition: BigInt!
+  hash: [Bytes!]!
+  transaction: EVMTransaction!
+  ciphertext: [TransactCiphertext!]! @derivedFrom(field: "transact")
+  railgunBatchIndex: Int
+  railgunTxidIndex: Int
+}
+
+type Nullifier @entity {
+  id: ID!
+  actionType: ActionType!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  blockHash: Bytes!
+  treeNumber: BigInt!
+  nullifier: [Bytes!]!
+  transaction: EVMTransaction!
+}
+
+type Unshield @entity {
+  id: ID!
+  actionType: ActionType!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  blockHash: Bytes!
+  transaction: EVMTransaction!
   npk: BigInt!
   token: Token!
   amount: BigInt!
   fee: BigInt!
-  transactions: [EVMTransaction!]! @derivedFrom(field: "actions")
 }
 
 type EVMTransaction @entity {
   id: ID!
+  transactionHash: Bytes!
 
   commitmentBatches: [CommitmentBatch!]! @derivedFrom(field: "transaction")
   generatedCommitmentBatches: [GeneratedCommitmentBatch!]! @derivedFrom(field: "transaction")

@@ -1,4 +1,6 @@
-import { Ciphertext, CommitmentBatchEventNew, CommitmentCiphertext, CommitmentPreimage, CommitmentType, LegacyCommitmentCiphertext, LegacyEncryptedCommitment, LegacyGeneratedCommitment, Nullifier, ShieldCommitment, Token, TokenType, TransactCommitment, Unshield } from "./model";
+// import { Ciphertext, CommitmentBatchEventNew, CommitmentCiphertext, CommitmentPreimage, CommitmentType, LegacyCommitmentCiphertext, LegacyEncryptedCommitment, LegacyGeneratedCommitment, Nullifier, ShieldCommitment, Token, TokenType, TransactCommitment, Unshield } from "./model";
+
+
 import { EvmProcessorLog } from "./evm-log";
 import { events } from "./abi/RailgunSmartWallet";
 import { idFrom2PaddedBigInts, idFromEventLogIndex } from "./id";
@@ -8,6 +10,7 @@ import { createBasicToken, createToken, type BasicToken } from "./token";
 import { getNoteHash } from "./hash";
 import { DataHandlerContext } from "@subsquid/evm-processor";
 import { Store } from "@subsquid/typeorm-store";
+import { CommitmentBatch, CommitmentBatchCiphertext } from "./model";
 
 function extractNullifierData(evmLog: any): { treeNumber: bigint, nullifier: bigint[] } {
     if (evmLog.topics[0] === events.Nullified.topic) {
@@ -72,80 +75,95 @@ export function handleNullifier(e: EvmProcessorLog): Array<Nullifier> {
 }
 
 export async function handleCommitmentBatch(e: EvmProcessorLog, ctx: DataHandlerContext<Store>): Promise<{
-    ciphertexts: Array<Ciphertext>,
-    lcc: Array<LegacyCommitmentCiphertext>,
-    lec: Array<LegacyEncryptedCommitment>
+    commitmentBatch: CommitmentBatch
+    ciphertext: CommitmentBatchCiphertext[]
 }> {
 
     const data = events.CommitmentBatch.decode(e);
-
+    const id = idFrom2PaddedBigInts(BigInt(e.block.height), BigInt(e.transactionIndex));
+    
     // console.log(data);
     const [treeNumber, startPosition, hash, ciphertext] = data;
+
+    const output = {
+      id,
+      blockNumber: BigInt(e.block.height),
+      treeNumber, 
+      startPosition, 
+      hash: hash.map(bigIntToPaddedBytes),
+    }
+
+    const commitmentBatch = new CommitmentBatch(output)
+
     const innerCiphertexts = ciphertext.map(c=>{
         const [innerCiphertext, ephemeralKeys, innerMemo] = c;
         // console.log(innerCiphertext)
         // const [iv, tag, data, data2] = innerCiphertext;
-        return {
-            ciphertext: innerCiphertext,
-            ephemeralKeys,
-            memo: innerMemo
-        }
+        return new CommitmentBatchCiphertext({
+            id,
+            batch: commitmentBatch,
+            ciphertext: innerCiphertext.map(bigIntToPaddedBytes),
+            ephemeralKeys: ephemeralKeys.map(bigIntToPaddedBytes),
+            memo: innerMemo.map(bigIntToPaddedBytes)
+        })
     });
-    const output = {
-        treeNumber, 
-        startPosition, 
-        hash, 
-        ciphertext: innerCiphertexts,
-    }
 
+
+
+    commitmentBatch.ciphertext = innerCiphertexts;
+
+    return {
+        commitmentBatch,
+        ciphertext: innerCiphertexts
+    }
     // return output;
 
     // console.log('data', data as CommitmentBatch)
 
-    const ciphertexts = new Array<Ciphertext>();
-    const legacyCommitmentCiphertexts = new Array<LegacyCommitmentCiphertext>();
-    const legacyEncrpytedCommitments = new Array<LegacyEncryptedCommitment>();
+    // const ciphertexts = new Array<Ciphertext>();
+    // const legacyCommitmentCiphertexts = new Array<LegacyCommitmentCiphertext>();
+    // const legacyEncrpytedCommitments = new Array<LegacyEncryptedCommitment>();
 
-    const ciphertextStructs = data.ciphertext;
-    for (let i = 0; i < ciphertextStructs.length; ++i) {
-        const ciphertextStruct = ciphertextStructs[i];
-        const treePosition = data.startPosition + BigInt(i);
-        const id = idFrom2PaddedBigInts(data.treeNumber, treePosition);
-        const ciphertext = parseCiphertext(id, ciphertextStruct.ciphertext.map(ct => bigIntToPaddedHexString(ct)));
-        ciphertexts.push(ciphertext);
+    // const ciphertextStructs = data.ciphertext;
+    // for (let i = 0; i < ciphertextStructs.length; ++i) {
+    //     const ciphertextStruct = ciphertextStructs[i];
+    //     const treePosition = data.startPosition + BigInt(i);
+    //     const id = idFrom2PaddedBigInts(data.treeNumber, treePosition);
+    //     const ciphertext = parseCiphertext(id, ciphertextStruct.ciphertext.map(ct => bigIntToPaddedHexString(ct)));
+    //     ciphertexts.push(ciphertext);
 
-        const legacyCommitmentCiphertext = new LegacyCommitmentCiphertext(
-            {
-                id,
-                ciphertext,
-                ephemeralKeys: ciphertextStruct.ephemeralKeys.map(key => bigIntToPaddedBytes(key)),
-                memo: ciphertextStruct.memo.map(memo => bigIntToPaddedBytes(memo)),
-            }
-        );
-        legacyCommitmentCiphertexts.push(legacyCommitmentCiphertext);
+    //     const legacyCommitmentCiphertext = new LegacyCommitmentCiphertext(
+    //         {
+    //             id,
+    //             ciphertext,
+    //             ephemeralKeys: ciphertextStruct.ephemeralKeys.map(key => bigIntToPaddedBytes(key)),
+    //             memo: ciphertextStruct.memo.map(memo => bigIntToPaddedBytes(memo)),
+    //         }
+    //     );
+    //     legacyCommitmentCiphertexts.push(legacyCommitmentCiphertext);
 
-        legacyEncrpytedCommitments.push(new LegacyEncryptedCommitment({
-            id,
-            blockNumber: BigInt(e.block.height),
-            blockTimestamp: BigInt(e.block.timestamp) / 1000n,
-            transactionHash: hexStringToBytes(e.transaction.hash),
-            treeNumber: Number(data.treeNumber),
-            batchStartTreePosition: Number(data.startPosition),
-            treePosition: Number(treePosition),
-            commitmentType: CommitmentType.LegacyEncryptedCommitment,
-            hash: data.hash[i],
-            ciphertext: legacyCommitmentCiphertext
-        }));
-    }
+    //     legacyEncrpytedCommitments.push(new LegacyEncryptedCommitment({
+    //         id,
+    //         blockNumber: BigInt(e.block.height),
+    //         blockTimestamp: BigInt(e.block.timestamp) / 1000n,
+    //         transactionHash: hexStringToBytes(e.transaction.hash),
+    //         treeNumber: Number(data.treeNumber),
+    //         batchStartTreePosition: Number(data.startPosition),
+    //         treePosition: Number(treePosition),
+    //         commitmentType: CommitmentType.LegacyEncryptedCommitment,
+    //         hash: data.hash[i],
+    //         ciphertext: legacyCommitmentCiphertext
+    //     }));
+    // }
 
-    const id = idFrom2PaddedBigInts(BigInt(e.block.height), BigInt(e.transactionIndex));
-    await ctx.store.upsert(new CommitmentBatchEventNew({ id, treeNumber: data.treeNumber, batchStartTreePosition: data.startPosition }));
+    // const id = idFrom2PaddedBigInts(BigInt(e.block.height), BigInt(e.transactionIndex));
+    // await ctx.store.upsert(new CommitmentBatchEventNew({ id, treeNumber: data.treeNumber, batchStartTreePosition: data.startPosition }));
 
-    return {
-        ciphertexts,
-        lcc: legacyCommitmentCiphertexts,
-        lec: legacyEncrpytedCommitments,
-    };
+    // return {
+    //     ciphertexts,
+    //     lcc: legacyCommitmentCiphertexts,
+    //     lec: legacyEncrpytedCommitments,
+    // };
 }
 
 export async function handleGeneratedCommitmentBatch(
