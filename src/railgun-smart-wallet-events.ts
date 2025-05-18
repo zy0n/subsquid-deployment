@@ -3,14 +3,14 @@
 
 import { EvmProcessorLog } from "./evm-log";
 import { events } from "./abi/RailgunSmartWallet";
-import { idFrom2PaddedBigInts, idFromEventLogIndex } from "./id";
+import { idFrom2PaddedBigInts, idFrom3PaddedBigInts, idFromEventLogIndex } from "./id";
 import { bigIntToPad32Bytes, bigIntToPaddedBytes, bigIntToPaddedHexString, hexStringToBytes, padHexStringToEven, padTo32BytesStart} from "./utils";
 import { getCiphertextData, getCiphertextIV, getCiphertextTag } from "./ciphertext";
 import { createBasicToken, createToken, type BasicToken } from "./token";
 import { getNoteHash } from "./hash";
 import { DataHandlerContext } from "@subsquid/evm-processor";
 import { Store } from "@subsquid/typeorm-store";
-import { CommitmentBatch, CommitmentBatchCiphertext } from "./model";
+import { CommitmentBatch, CommitmentBatchCiphertext, EVMTransaction, Nullifier } from "./model";
 
 function extractNullifierData(evmLog: any): { treeNumber: bigint, nullifier: bigint[] } {
     if (evmLog.topics[0] === events.Nullified.topic) {
@@ -26,52 +26,64 @@ function extractNullifierData(evmLog: any): { treeNumber: bigint, nullifier: big
     throw new Error("Unsupported topic");
 }
 
-/*
- *  ciphertexts: BigInt represented as hex string starting with 0x
-*/
-function parseCiphertext(id: string, ciphertexts: string[]): Ciphertext {
-    const iv = getCiphertextIV(ciphertexts);
-    const tag = getCiphertextTag(ciphertexts);
-    const data = getCiphertextData(ciphertexts);
-    const cipherText = new Ciphertext({
-        id,
-        iv,
-        tag,
-        data
-    });
-    return cipherText;
-}
+// /*
+//  *  ciphertexts: BigInt represented as hex string starting with 0x
+// */
+// function parseCiphertext(id: string, ciphertexts: string[]): Ciphertext {
+//     const iv = getCiphertextIV(ciphertexts);
+//     const tag = getCiphertextTag(ciphertexts);
+//     const data = getCiphertextData(ciphertexts);
+//     const cipherText = new Ciphertext({
+//         id,
+//         iv,
+//         tag,
+//         data
+//     });
+//     return cipherText;
+// }
 
-export function handleNullifier(e: EvmProcessorLog): Array<Nullifier> {
+export function handleNullifier(e: EvmProcessorLog): {
+  nullified: Nullifier
+} {
     const data = extractNullifierData(e);
-    const nullifiers = data.nullifier;
-
     const {treeNumber, nullifier} = data;
-
-    const output = {
+    const id = idFrom2PaddedBigInts(BigInt(e.block.height), BigInt(e.transactionIndex));
+    const transaction = new EVMTransaction({
+      id,
+      transactionHash: hexStringToBytes(e.transaction.hash),
+    })
+    const output = new Nullifier({
+        id,
+        blockNumber: BigInt(e.block.height),
+        blockTimestamp: BigInt(e.block.timestamp) / 1000n,
+        transaction,
         treeNumber,
-        nullifier
-    };
+        nullifier: nullifier.map(bigIntToPaddedBytes)
+    })
+    output.transaction.nullifiers.push(output);
     // console.log('Nullifier', output)
 
-    let nullified = new Array<Nullifier>();
-    for (let i = 0; i < nullifiers.length; i++) {
-        // Convert nullifier from bigInt to hex
-        const id = idFrom2PaddedBigInts(treeNumber, nullifiers[i]);
-
-        // Making compatible with subgraph
-        const nullifier = (e.topics[0] === events.Nullified.topic) ? padTo32BytesStart(bigIntToPaddedHexString(nullifiers[i])) : bigIntToPaddedHexString(nullifiers[i]);
-        nullified.push(new Nullifier({
-            id,
-            blockNumber: BigInt(e.block.height),
-            blockTimestamp: BigInt(e.block.timestamp) / 1000n,
-            transactionHash: hexStringToBytes(e.transaction.hash),
-            treeNumber: Number(treeNumber),
-            nullifier: hexStringToBytes(nullifier)
-        }));
+    return {
+      nullified: output
     }
+    // let nullified = new Array<Nullifier>();
+    // for (let i = 0; i < nullifiers.length; i++) {
+    //     // Convert nullifier from bigInt to hex
+    //     const id = idFrom2PaddedBigInts(treeNumber, nullifiers[i]);
 
-    return nullified;
+    //     // Making compatible with subgraph
+    //     const nullifier = (e.topics[0] === events.Nullified.topic) ? padTo32BytesStart(bigIntToPaddedHexString(nullifiers[i])) : bigIntToPaddedHexString(nullifiers[i]);
+    //     nullified.push(new Nullifier({
+    //         id,
+    //         blockNumber: BigInt(e.block.height),
+    //         blockTimestamp: BigInt(e.block.timestamp) / 1000n,
+    //         transactionHash: hexStringToBytes(e.transaction.hash),
+    //         treeNumber,
+    //         nullifier: hexStringToBytes(nullifier)
+    //     }));
+    // }
+
+    // return nullified;
 }
 
 export async function handleCommitmentBatch(e: EvmProcessorLog, ctx: DataHandlerContext<Store>): Promise<{
@@ -81,6 +93,12 @@ export async function handleCommitmentBatch(e: EvmProcessorLog, ctx: DataHandler
 
     const data = events.CommitmentBatch.decode(e);
     const id = idFrom2PaddedBigInts(BigInt(e.block.height), BigInt(e.transactionIndex));
+
+    const transaction = new EVMTransaction({
+      id,
+      transactionHash: hexStringToBytes(e.transaction.hash),
+    })
+
     
     // console.log(data);
     const [treeNumber, startPosition, hash, ciphertext] = data;
@@ -91,6 +109,7 @@ export async function handleCommitmentBatch(e: EvmProcessorLog, ctx: DataHandler
       treeNumber, 
       startPosition, 
       hash: hash.map(bigIntToPaddedBytes),
+      transaction
     }
 
     const commitmentBatch = new CommitmentBatch(output)
@@ -111,7 +130,7 @@ export async function handleCommitmentBatch(e: EvmProcessorLog, ctx: DataHandler
 
 
     commitmentBatch.ciphertext = innerCiphertexts;
-
+    commitmentBatch.transaction.commitmentBatches.push(commitmentBatch)
     return {
         commitmentBatch,
         ciphertext: innerCiphertexts
