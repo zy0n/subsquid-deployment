@@ -66,9 +66,6 @@ type TransactCiphertext @entity {
 type CommitmentBatch @entity {
   id: ID!
   actionType: ActionType!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  blockHash: Bytes!
   treeNumber: BigInt!
   startPosition: BigInt!
   hash: [Bytes!]!
@@ -79,9 +76,6 @@ type CommitmentBatch @entity {
 type GeneratedCommitmentBatch @entity {
   id: ID!
   actionType: ActionType!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  blockHash: Bytes!
   treeNumber: BigInt!
   startPosition: BigInt!
   transaction: EVMTransaction!
@@ -92,9 +86,6 @@ type GeneratedCommitmentBatch @entity {
 type Shield @entity {
   id: ID!
   actionType: ActionType!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  blockHash: Bytes!
   treeNumber: BigInt!
   startPosition: BigInt!
   transaction: EVMTransaction!
@@ -105,9 +96,6 @@ type Shield @entity {
 type Transact @entity {
   id: ID!
   actionType: ActionType!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  blockHash: Bytes!
   treeNumber: BigInt!
   startPosition: BigInt!
   hash: [Bytes!]!
@@ -120,9 +108,6 @@ type Transact @entity {
 type Nullifier @entity {
   id: ID!
   actionType: ActionType!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  blockHash: Bytes!
   treeNumber: BigInt!
   nullifier: [Bytes!]!
   transaction: EVMTransaction!
@@ -131,9 +116,6 @@ type Nullifier @entity {
 type Unshield @entity {
   id: ID!
   actionType: ActionType!
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  blockHash: Bytes!
   transaction: EVMTransaction!
   npk: BigInt!
   token: Token!
@@ -144,6 +126,9 @@ type Unshield @entity {
 type EVMTransaction @entity {
   id: ID!
   transactionHash: Bytes!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  blockHash: Bytes!
 
   commitmentBatches: [CommitmentBatch!]! @derivedFrom(field: "transaction")
   generatedCommitmentBatches: [GeneratedCommitmentBatch!]! @derivedFrom(field: "transaction")

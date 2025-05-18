@@ -10,7 +10,7 @@ import { createBasicToken, createToken, type BasicToken } from "./token";
 import { getNoteHash } from "./hash";
 import { DataHandlerContext } from "@subsquid/evm-processor";
 import { Store } from "@subsquid/typeorm-store";
-import { CommitmentBatch, CommitmentBatchCiphertext, EVMTransaction, Nullifier, GeneratedCommitmentBatch, GeneratedCommitmentBatchCommitment, Transact, TransactCiphertext } from "./model";
+import { CommitmentBatch, CommitmentBatchCiphertext, EVMTransaction, Nullifier, GeneratedCommitmentBatch, GeneratedCommitmentBatchCommitment, Transact, TransactCiphertext, Unshield, type Shield, type ShieldCiphertext, type ShieldCommitment } from "./model";
 
 function extractNullifierData(evmLog: any): { treeNumber: bigint, nullifier: bigint[] } {
     if (evmLog.topics[0] === events.Nullified.topic) {
@@ -24,6 +24,18 @@ function extractNullifierData(evmLog: any): { treeNumber: bigint, nullifier: big
         return events.Nullifiers.decode(evmLog);
     }
     throw new Error("Unsupported topic");
+}
+
+function generateTransaction (
+  e: EvmProcessorLog
+) {
+    return new EVMTransaction({
+      // id,
+      transactionHash: hexStringToBytes(e.transaction.hash),
+      blockNumber: BigInt(e.block.height),
+      blockHash: hexStringToBytes(e.block.hash),
+      blockTimestamp: BigInt(e.block.timestamp)
+    })
 }
 
 // /*
@@ -48,14 +60,13 @@ export function handleNullifier(e: EvmProcessorLog): {
     const data = extractNullifierData(e);
     const {treeNumber, nullifier} = data;
     const id = idFrom2PaddedBigInts(BigInt(e.block.height), BigInt(e.transactionIndex));
-    const transaction = new EVMTransaction({
-      // id,
-      transactionHash: hexStringToBytes(e.transaction.hash),
-    })
+    // const transaction = new EVMTransaction({
+    //   // id,
+    //   transactionHash: hexStringToBytes(e.transaction.hash),
+    // })
+    const transaction = generateTransaction(e);
     const output = new Nullifier({
         // id,
-        blockNumber: BigInt(e.block.height),
-        blockTimestamp: BigInt(e.block.timestamp) / 1000n,
         transaction,
         treeNumber,
         nullifier: nullifier.map(bigIntToPaddedBytes)
@@ -94,10 +105,11 @@ export async function handleCommitmentBatch(e: EvmProcessorLog, ctx: DataHandler
     const data = events.CommitmentBatch.decode(e);
     const id = idFrom2PaddedBigInts(BigInt(e.block.height), BigInt(e.transactionIndex));
 
-    const transaction = new EVMTransaction({
-      // id,
-      transactionHash: hexStringToBytes(e.transaction.hash),
-    })
+    // const transaction = new EVMTransaction({
+    //   // id,
+    //   transactionHash: hexStringToBytes(e.transaction.hash),
+    // })
+    const transaction = generateTransaction(e);
 
     
     // console.log(data);
@@ -194,9 +206,10 @@ export async function handleGeneratedCommitmentBatch(
 }> {
     const data = events.GeneratedCommitmentBatch.decode(e);
 
-    const transaction = new EVMTransaction({
-      transactionHash: hexStringToBytes(e.transaction.hash),
-    })
+    // const transaction = new EVMTransaction({
+    //   transactionHash: hexStringToBytes(e.transaction.hash),
+    // })
+    const transaction = generateTransaction(e);
 
     const [treeNumber, startPosition, commitments, encryptedRandom] = data;
     const generatedCommitmentBatch = new GeneratedCommitmentBatch({
@@ -394,46 +407,64 @@ export async function handleTransact(e: EvmProcessorLog, ctx: DataHandlerContext
 }
 
 export function handleUnshield(e: EvmProcessorLog): {
-    token: Token,
     unshield: Unshield
 } {
     const data = events.Unshield.decode(e);
 
     const [npk, innerToken, amount, fee] = data;
     const { tokenType, tokenAddress, tokenSubID } = innerToken;
-    const _token = createBasicToken(tokenType, tokenAddress, tokenSubID);
-
-    const output = {
-        npk, 
-        token: _token,
-        amount,
-        fee
-    }
-    // console.log("UNSHIELD:", output)
-    const id = idFromEventLogIndex(e);
-
     const token = createToken(tokenType, tokenAddress, tokenSubID);
-    // const { tokenType, tokenAddress, tokenSubID } = data.token;
+
+    const transaction = generateTransaction(e);
 
     const unshield = new Unshield({
-        id,
-        blockNumber: BigInt(e.block.height),
-        blockTimestamp: BigInt(e.block.timestamp) / 1000n,
-        transactionHash: hexStringToBytes(e.transaction.hash),
-        to: hexStringToBytes(data.to),
-        token,
-        amount: data.amount,
-        fee: data.fee,
-        eventLogIndex: BigInt(e.logIndex)
+      npk: BigInt(npk),
+      token,
+      transaction,
+      amount,
+      fee
     })
+    unshield.transaction.unshields.push(unshield)
+    // const output = {
+    //     npk, 
+    //     token,
+    //     amount,
+    //     fee
+    // }
 
-    return { token, unshield };
+
+    return {
+      unshield
+    }
+    // console.log("UNSHIELD:", output)
+    // const id = idFromEventLogIndex(e);
+
+    // const token = createToken(tokenType, tokenAddress, tokenSubID);
+    // // const { tokenType, tokenAddress, tokenSubID } = data.token;
+
+    // const unshield = new Unshield({
+    //     id,
+    //     blockNumber: BigInt(e.block.height),
+    //     blockTimestamp: BigInt(e.block.timestamp) / 1000n,
+    //     transactionHash: hexStringToBytes(e.transaction.hash),
+    //     to: hexStringToBytes(data.to),
+    //     token,
+    //     amount: data.amount,
+    //     fee: data.fee,
+    //     eventLogIndex: BigInt(e.logIndex)
+    // })
+
+    // return { token, unshield };
 }
 
 export async function handleShield(e: EvmProcessorLog, ctx: any): Promise<{
-    tokens: Map<string, Token>,
-    commitmentPreimages: Array<CommitmentPreimage>
-    shieldCommitments: Array<ShieldCommitment>
+    // tokens: Map<string, Token>,
+    // commitmentPreimages: Array<CommitmentPreimage>
+    // shieldCommitments: Array<ShieldCommitment>
+
+    shield: Shield
+    ciphertext: ShieldCiphertext
+    commitment: ShieldCommitment
 }> {
     let data = null;
     if (e.topics[0] === events['Shield(uint256,uint256,(bytes32,(uint8,address,uint256),uint120)[],(bytes32[3],bytes32)[],uint256[])'].topic) {
