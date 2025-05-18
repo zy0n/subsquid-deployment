@@ -72,8 +72,8 @@ type CommitmentBatch @entity {
   transaction: EVMTransaction!
   ciphertext: [CommitmentBatchCiphertext!]! @derivedFrom(field: "batch")
 
-  railgunBatchIndex: Int
-  railgunTxidIndex: Int
+  # railgunBatchIndex: Int
+  # railgunTxidIndex: Int
 }
 
 type GeneratedCommitmentBatch @entity {
@@ -85,8 +85,8 @@ type GeneratedCommitmentBatch @entity {
   commitments: [GeneratedCommitmentBatchCommitment!]! @derivedFrom(field: "batch")
   encryptedRandom: [[Bytes!]!]!
 
-  railgunBatchIndex: Int
-  railgunTxidIndex: Int
+  # railgunBatchIndex: Int
+  # railgunTxidIndex: Int
 }
 
 type Shield @entity {
@@ -99,8 +99,8 @@ type Shield @entity {
   shieldCiphertext: [ShieldCiphertext!]! @derivedFrom(field: "shield")
   fees: [Bytes!]
 
-  railgunBatchIndex: Int
-  railgunTxidIndex: Int
+  # railgunBatchIndex: Int
+  # railgunTxidIndex: Int
 }
 
 type Transact @entity {
@@ -112,8 +112,8 @@ type Transact @entity {
   transaction: EVMTransaction!
   ciphertext: [TransactCiphertext!]! @derivedFrom(field: "transact")
 
-  railgunBatchIndex: Int
-  railgunTxidIndex: Int
+  #railgunBatchIndex: Int
+  #railgunTxidIndex: Int
 }
 
 type Nullifier @entity {
@@ -123,8 +123,8 @@ type Nullifier @entity {
   nullifier: [Bytes!]!
   transaction: EVMTransaction!
 
-  railgunBatchIndex: Int
-  railgunTxidIndex: Int
+  # railgunBatchIndex: Int
+  # railgunTxidIndex: Int
 }
 
 type Unshield @entity {
@@ -136,8 +136,8 @@ type Unshield @entity {
   amount: BigInt!
   fee: BigInt!
 
-  railgunBatchIndex: Int
-  railgunTxidIndex: Int
+  # railgunBatchIndex: Int
+  # railgunTxidIndex: Int
 }
 
 type Action @entity {
@@ -162,12 +162,6 @@ type EVMTransaction @entity {
   actions: [Action!]! @derivedFrom(field: "transaction")
   actionStream: ActionStream!
 
-  # commitmentBatches: [CommitmentBatch!]! @derivedFrom(field: "transaction")
-  # generatedCommitmentBatches: [GeneratedCommitmentBatch!]! @derivedFrom(field: "transaction")
-  # shields: [Shield!]! @derivedFrom(field: "transaction")
-  # transacts: [Transact!]! @derivedFrom(field: "transaction")
-  # nullifiers: [Nullifier!]! @derivedFrom(field: "transaction")
-  # unshields: [Unshield!]! @derivedFrom(field: "transaction")
 }
 
 type ActionStream @entity {
