@@ -74,26 +74,26 @@ export async function getAction (
   return action;
 }
 
-export async function generateTransaction (
+const transactionCache = new Map<string, EVMTransaction>();
+export async function generateTransaction(
   e: EvmProcessorLog,
   ctx: DataHandlerContext<Store>,
-  action: ActionStream
-) {
+  actionStream: ActionStream
+): Promise<EVMTransaction> {
   const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), 'transaction');
-  const transaction = new EVMTransaction({
+
+  const transaction = transactionCache.get(id);
+
+  if (!transaction) {
+    const _transaction = new EVMTransaction({
       id,
-      actions: [],
       transactionHash: hexStringToBytes(e.transaction.hash),
-      actionStream: action
-      // commitmentBatches: [],
-      // generatedCommitmentBatches: [],
-      // shields: [],
-      // transacts: [],
-      // nullifiers: [],
-      // unshields: []
-    })
-    await ctx.store.save(transaction)
-    return transaction;
+      actionStream,
+    });
+    transactionCache.set(id, _transaction)
+    return _transaction;
+  }
+  return transaction;
 }
 
 // /*
@@ -122,6 +122,10 @@ export async function handleNullifier(
     const data = extractNullifierData(e);
     const {treeNumber, nullifier} = data;
     const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), ActionType.Nullifier);
+    // TODO: make this a function
+    await ctx.store.save(transaction.actionStream)
+    await ctx.store.save(transaction)
+
     const output = new Nullifier({
       actionType: ActionType.Nullifier,
       id,
@@ -141,8 +145,11 @@ export async function handleNullifier(
     //   id,
     //   nullifier: output
     // })
-    output.transaction.actions.push(action);
-    await ctx.store.save(transaction)
+    // if(typeof transaction.actions == 'undefined'){
+    //   transaction.actions = []
+    // }
+    // output.transaction.actions.push(action);
+    // await ctx.store.save(transaction)
     await ctx.store.save(output)
     await ctx.store.save(action);
 
@@ -164,8 +171,8 @@ export async function handleCommitmentBatch(
     const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), ActionType.CommitmentBatch);
     const [treeNumber, startPosition, hash, ciphertext] = data;
 
- 
-
+    await ctx.store.save(transaction.actionStream)
+    await ctx.store.save(transaction)
     const commitmentBatch = new CommitmentBatch({
       actionType: ActionType.CommitmentBatch,
       id,
@@ -200,10 +207,13 @@ export async function handleCommitmentBatch(
   
     );
     action.commitmentBatch = commitmentBatch;
-    commitmentBatch.transaction.actions.push(action);
+    // if(typeof transaction.actions == 'undefined'){
+    //   transaction.actions = []
+    // }
+    // commitmentBatch.transaction.actions.push(action);
 
     // commitmentBatch.transaction.commitmentBatches.push(commitmentBatch)
-    await ctx.store.save(transaction)
+    // await ctx.store.save(transaction)
     await ctx.store.save(commitmentBatch)
     await ctx.store.save(action);
     
@@ -225,6 +235,10 @@ export async function handleGeneratedCommitmentBatch(
     const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), ActionType.GeneratedCommitmentBatch);
 
     const [treeNumber, startPosition, commitments, encryptedRandom] = data;
+
+    await ctx.store.save(transaction.actionStream)
+    await ctx.store.save(transaction)
+
     const generatedCommitmentBatch = new GeneratedCommitmentBatch({
       actionType: ActionType.GeneratedCommitmentBatch,
       id,
@@ -262,11 +276,14 @@ export async function handleGeneratedCommitmentBatch(
       transaction,
     );
     action.generatedCommitmentBatch = generatedCommitmentBatch;
-    generatedCommitmentBatch.transaction.actions.push(action);
+    // if(typeof transaction.actions == 'undefined'){
+    //   transaction.actions = []
+    // }
+    // generatedCommitmentBatch.transaction.actions.push(action);
 
     // generatedCommitmentBatch.transaction.generatedCommitmentBatches.push(generatedCommitmentBatch)
 
-    await ctx.store.save(transaction);
+    // await ctx.store.save(transaction);
     await ctx.store.save(generatedCommitmentBatch);
     await ctx.store.save(action)
     return {
@@ -287,6 +304,10 @@ export async function handleTransact(
 
     const [treeNumber, startPosition, hash, ciphertext] = data;
     const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), ActionType.Transact);
+
+
+    await ctx.store.save(transaction.actionStream)
+    await ctx.store.save(transaction)
 
     const transact = new Transact({
       actionType: ActionType.Transact,
@@ -330,9 +351,12 @@ export async function handleTransact(
      
     );
     action.transact = transact;
-    transact.transaction.actions.push(action);
+    // if(typeof transaction.actions == 'undefined'){
+    //   transaction.actions = []
+    // }
+    // transact.transaction.actions.push(action);
     // transact.transaction.transacts.push(transact)
-    await ctx.store.save(transaction);
+    // await ctx.store.save(transaction);
     await ctx.store.save(transact)
     await ctx.store.save(action)
 
@@ -358,6 +382,9 @@ export async function handleUnshield(
     await ctx.store.save(token);
     const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), ActionType.Unshield);
 
+    await ctx.store.save(transaction.actionStream)
+    await ctx.store.save(transaction)
+
     const unshield = new Unshield({
       actionType: ActionType.Unshield,
       id,
@@ -375,9 +402,12 @@ export async function handleUnshield(
       transaction,
     );
     action.unshield = unshield;
-    unshield.transaction.actions.push(action);
+    // if(typeof transaction.actions == 'undefined'){
+    //   transaction.actions = []
+    // }
+    // unshield.transaction.actions.push(action);
     // unshield.transaction.unshields.push(unshield)
-    await ctx.store.save(transaction)
+    // await ctx.store.save(transaction)
     await ctx.store.save(unshield)
     await ctx.store.save(action)
 
@@ -406,6 +436,9 @@ export async function handleShield(
 
     const [treeNumber, startPosition, commitments, shieldCiphertext, fees] = data;
     const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), ActionType.Shield);
+
+    await ctx.store.save(transaction.actionStream)
+    await ctx.store.save(transaction)
 
     const shield = new Shield({
       actionType: ActionType.Shield,
@@ -469,10 +502,13 @@ export async function handleShield(
       transaction,
     );
     action.shield = shield;
-    shield.transaction.actions.push(action);
+    // if(typeof transaction.actions == 'undefined'){
+    //   transaction.actions = []
+    // }
+    // shield.transaction.actions.push(action);
     // shield.transaction.shields.push(shield)
 
-    await ctx.store.save(transaction)
+    // await ctx.store.save(transaction)
     await ctx.store.save(shield);
     await ctx.store.save(action);
 

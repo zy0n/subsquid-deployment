@@ -1,11 +1,11 @@
-import { TypeormDatabase } from '@subsquid/typeorm-store'
+import { TypeormDatabase, type Store } from '@subsquid/typeorm-store'
 import { processor } from './processor'
 import { events, functions } from './abi/RailgunSmartWallet'
 // import { Ciphertext, CommitmentCiphertext, CommitmentPreimage, LegacyCommitmentCiphertext, LegacyEncryptedCommitment, LegacyGeneratedCommitment, Nullifier, ShieldCommitment, Token, TransactCommitment, Transaction, Unshield } from './model';
 import { entityIdFromBlockIndex, generateAction, generateTransaction, handleCommitmentBatch, handleGeneratedCommitmentBatch, handleNullifier, handleShield, handleTransact, handleUnshield } from './railgun-smart-wallet-events';
 import { EvmProcessorLog } from './evm-log';
 // import { handleLegacyTransactionCall, handleTransactionCall } from './railgun-smart-wallet-call';
-import { ActionStream, CommitmentBatch, CommitmentBatchCiphertext, EVMTransaction, GeneratedCommitmentBatch, GeneratedCommitmentBatchCommitment, Nullifier, ShieldCiphertext, ShieldCommitment, TransactCiphertext, type Shield, type Transact, type Unshield } from './model';
+import { Action, ActionStream, CommitmentBatch, CommitmentBatchCiphertext, EVMTransaction, GeneratedCommitmentBatch, GeneratedCommitmentBatchCommitment, Nullifier, ShieldCiphertext, ShieldCommitment, TransactCiphertext, type Shield, type Transact, type Unshield } from './model';
 import { hexStringToBytes } from './utils';
 
 const ENABLE_LOG = false;
@@ -50,14 +50,14 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
       blockHash: hexStringToBytes(c.header.hash),
       transactions: []
     })
-    await ctx.store.save(actionStream);
+    // await ctx.store.save(actionStream);
     for (let evt of c.logs) {
       if (evt.address.toLowerCase() !== contractAddress) continue;
-
+      
       const e = evt as EvmProcessorLog;
-
-
       const transaction = await generateTransaction(e, ctx, actionStream);
+
+
       switch (e.topics[0]) {
         case events.Nullified.topic:
         case events.Nullifiers.topic:
@@ -99,9 +99,13 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
             ShieldCiphertexts.push(...ciphertext)
           } break;
       }
-      Transactions.push(transaction)
-      actionStream.transactions.push(transaction)
-      await ctx.store.save(actionStream)
+      // if(transaction.actions.length > 0){
+        // console.log()
+        // console.log('length', transaction.actions.length)
+        Transactions.push(transaction)
+        // actionStream.transactions.push(transaction)
+        // await ctx.store.save(actionStream)
+      // } 
     }
 
     // Handle call
