@@ -63,7 +63,7 @@ type TransactCiphertext @entity {
   memo: BigInt!
 }
 
-type CommitmentBatch @entity @index(fields: ["treeNumber", "startPosition"])  {
+type CommitmentBatch @entity @index(fields: ["treeNumber", "startPosition"]) {
   id: ID!
   actionType: ActionType!
   treeNumber: BigInt!
@@ -71,12 +71,9 @@ type CommitmentBatch @entity @index(fields: ["treeNumber", "startPosition"])  {
   hash: [Bytes!]!
   transaction: EVMTransaction!
   ciphertext: [CommitmentBatchCiphertext!]! @derivedFrom(field: "batch")
-
-  # railgunBatchIndex: Int
-  # railgunTxidIndex: Int
 }
 
-type GeneratedCommitmentBatch @entity @index(fields: ["treeNumber", "startPosition"])  {
+type GeneratedCommitmentBatch @entity @index(fields: ["treeNumber", "startPosition"]) {
   id: ID!
   actionType: ActionType!
   treeNumber: BigInt!
@@ -84,12 +81,9 @@ type GeneratedCommitmentBatch @entity @index(fields: ["treeNumber", "startPositi
   transaction: EVMTransaction!
   commitments: [GeneratedCommitmentBatchCommitment!]! @derivedFrom(field: "batch")
   encryptedRandom: [[Bytes!]!]!
-
-  # railgunBatchIndex: Int
-  # railgunTxidIndex: Int
 }
 
-type Shield @entity @index(fields: ["treeNumber", "startPosition"])  {
+type Shield @entity @index(fields: ["treeNumber", "startPosition"]) {
   id: ID!
   actionType: ActionType!
   treeNumber: BigInt!
@@ -98,9 +92,6 @@ type Shield @entity @index(fields: ["treeNumber", "startPosition"])  {
   commitments: [ShieldCommitment!]! @derivedFrom(field: "shield")
   shieldCiphertext: [ShieldCiphertext!]! @derivedFrom(field: "shield")
   fees: [Bytes!]
-
-  # railgunBatchIndex: Int
-  # railgunTxidIndex: Int
 }
 
 type Transact @entity @index(fields: ["treeNumber", "startPosition"]) {
@@ -111,9 +102,6 @@ type Transact @entity @index(fields: ["treeNumber", "startPosition"]) {
   hash: [Bytes!]!
   transaction: EVMTransaction!
   ciphertext: [TransactCiphertext!]! @derivedFrom(field: "transact")
-
-  #railgunBatchIndex: Int
-  #railgunTxidIndex: Int
 }
 
 type Nullifier @entity @index(fields: ["treeNumber"]) {
@@ -122,9 +110,6 @@ type Nullifier @entity @index(fields: ["treeNumber"]) {
   treeNumber: BigInt!
   nullifier: [Bytes!]!
   transaction: EVMTransaction!
-
-  # railgunBatchIndex: Int
-  # railgunTxidIndex: Int
 }
 
 type Unshield @entity {
@@ -135,12 +120,9 @@ type Unshield @entity {
   token: Token!
   amount: BigInt!
   fee: BigInt!
-
-  # railgunBatchIndex: Int
-  # railgunTxidIndex: Int
 }
 
-type Action @entity {
+type Action @entity @index(fields: ["type"]) @index(fields: ["shield"]) @index(fields: ["transact"]) @index(fields: ["commitmentBatch"]) @index(fields: ["generatedCommitmentBatch"]) @index(fields: ["nullifier"]) @index(fields: ["unshield"]) {
   id: ID!
   type: ActionType!
   transaction: EVMTransaction!
