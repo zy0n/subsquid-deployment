@@ -1,13 +1,28 @@
-import { Ciphertext, CommitmentBatchEventNew, CommitmentCiphertext, CommitmentPreimage, CommitmentType, LegacyCommitmentCiphertext, LegacyEncryptedCommitment, LegacyGeneratedCommitment, Nullifier, ShieldCommitment, Token, TokenType, TransactCommitment, Unshield } from "./model";
+// import { Ciphertext, CommitmentBatchEventNew, CommitmentCiphertext, CommitmentPreimage, CommitmentType, LegacyCommitmentCiphertext, LegacyEncryptedCommitment, LegacyGeneratedCommitment, Nullifier, ShieldCommitment, Token, TokenType, TransactCommitment, Unshield } from "./model";
+
+
 import { EvmProcessorLog } from "./evm-log";
 import { events } from "./abi/RailgunSmartWallet";
-import { idFrom2PaddedBigInts, idFromEventLogIndex } from "./id";
+import { idFrom2PaddedBigInts, idFrom3PaddedBigInts, idFromEventLogIndex } from "./id";
 import { bigIntToPad32Bytes, bigIntToPaddedBytes, bigIntToPaddedHexString, hexStringToBytes, padHexStringToEven, padTo32BytesStart} from "./utils";
 import { getCiphertextData, getCiphertextIV, getCiphertextTag } from "./ciphertext";
-import { createToken } from "./token";
+import { createBasicToken, createToken, type BasicToken } from "./token";
 import { getNoteHash } from "./hash";
-import { DataHandlerContext } from "@subsquid/evm-processor";
+import { DataHandlerContext, type BlockData } from "@subsquid/evm-processor";
 import { Store } from "@subsquid/typeorm-store";
+import { CommitmentBatch, CommitmentBatchCiphertext, EVMTransaction, Nullifier, GeneratedCommitmentBatch, GeneratedCommitmentBatchCommitment, Shield, ShieldCiphertext, ShieldCommitment, Transact, TransactCiphertext, Unshield, ActionType, Action, type ActionStream } from "./model";
+
+export function entityIdFromBlockIndex(
+  blockNumber: bigint | number,
+  txIndex: bigint | number,
+  prefix?: string
+): string {
+  const pad = (x: bigint | number) => BigInt(x).toString(16).padStart(64, '0')
+  const id = `${pad(blockNumber)}${pad(txIndex)}`
+  const output =  prefix ? `${prefix}:${id}` : id;
+
+  return output
+}
 
 function extractNullifierData(evmLog: any): { treeNumber: bigint, nullifier: bigint[] } {
     if (evmLog.topics[0] === events.Nullified.topic) {
@@ -23,246 +38,357 @@ function extractNullifierData(evmLog: any): { treeNumber: bigint, nullifier: big
     throw new Error("Unsupported topic");
 }
 
-/*
- *  ciphertexts: BigInt represented as hex string starting with 0x
-*/
-function parseCiphertext(id: string, ciphertexts: string[]): Ciphertext {
-    const iv = getCiphertextIV(ciphertexts);
-    const tag = getCiphertextTag(ciphertexts);
-    const data = getCiphertextData(ciphertexts);
-    const cipherText = new Ciphertext({
-        id,
-        iv,
-        tag,
-        data
+export async function generateAction (
+  e: BlockData,
+  ctx: DataHandlerContext<Store>,
+  type: ActionType,
+  transaction: EVMTransaction,
+  injected: any,
+){
+
+  const id = entityIdFromBlockIndex(BigInt(e.header.height), 0n, `action:${type}`);
+  const action = new Action({
+    ...injected,
+    id,
+    type,
+    transaction
+  })
+  await ctx.store.save(action)
+  return action;
+}
+
+export async function getAction (
+  e: EvmProcessorLog,
+  ctx: DataHandlerContext<Store>,
+  type: ActionType,
+  transaction: EVMTransaction,
+){
+
+  const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.logIndex), `action:${type}`);
+  const action = new Action({
+    id,
+    type,
+    transaction,
+    eventLogIndex: e.logIndex
+  })
+  await ctx.store.save(action)
+  return action;
+}
+
+const transactionCache = new Map<string, EVMTransaction>();
+export async function generateTransaction(
+  e: EvmProcessorLog,
+  ctx: DataHandlerContext<Store>,
+  actionStream: ActionStream
+): Promise<EVMTransaction> {
+  const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), 'transaction');
+
+  const transaction = transactionCache.get(id);
+
+  if (!transaction) {
+    const _transaction = new EVMTransaction({
+      id,
+      transactionHash: hexStringToBytes(e.transaction.hash),
+      actionStream,
     });
-    return cipherText;
+    transactionCache.set(id, _transaction)
+    return _transaction;
+  }
+  return transaction;
 }
 
-export function handleNullifier(e: EvmProcessorLog): Array<Nullifier> {
-    const data = extractNullifierData(e);
-    const treeNumber = data.treeNumber;
-    const nullifiers = data.nullifier;
+// /*
+//  *  ciphertexts: BigInt represented as hex string starting with 0x
+// */
+// function parseCiphertext(id: string, ciphertexts: string[]): Ciphertext {
+//     const iv = getCiphertextIV(ciphertexts);
+//     const tag = getCiphertextTag(ciphertexts);
+//     const data = getCiphertextData(ciphertexts);
+//     const cipherText = new Ciphertext({
+//         id,
+//         iv,
+//         tag,
+//         data
+//     });
+//     return cipherText;
+// }
 
-    let nullified = new Array<Nullifier>();
-    for (let i = 0; i < nullifiers.length; i++) {
-        // Convert nullifier from bigInt to hex
-        const id = idFrom2PaddedBigInts(treeNumber, nullifiers[i]);
-
-        // Making compatible with subgraph
-        const nullifier = (e.topics[0] === events.Nullified.topic) ? padTo32BytesStart(bigIntToPaddedHexString(nullifiers[i])) : bigIntToPaddedHexString(nullifiers[i]);
-        nullified.push(new Nullifier({
-            id,
-            blockNumber: BigInt(e.block.height),
-            blockTimestamp: BigInt(e.block.timestamp) / 1000n,
-            transactionHash: hexStringToBytes(e.transaction.hash),
-            treeNumber: Number(treeNumber),
-            nullifier: hexStringToBytes(nullifier)
-        }));
-    }
-
-    return nullified;
-}
-
-export async function handleCommitmentBatch(e: EvmProcessorLog, ctx: DataHandlerContext<Store>): Promise<{
-    ciphertexts: Array<Ciphertext>,
-    lcc: Array<LegacyCommitmentCiphertext>,
-    lec: Array<LegacyEncryptedCommitment>
+export async function handleNullifier(
+  e: EvmProcessorLog, 
+  ctx: DataHandlerContext<Store>,
+  transaction: EVMTransaction
+):Promise <{
+  nullified: Nullifier
 }> {
-    const data = events.CommitmentBatch.decode(e);
+    const data = extractNullifierData(e);
+    const {treeNumber, nullifier} = data;
+    const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), ActionType.Nullifier);
+    // TODO: make this a function
+    await ctx.store.save(transaction.actionStream)
+    await ctx.store.save(transaction)
 
-    const ciphertexts = new Array<Ciphertext>();
-    const legacyCommitmentCiphertexts = new Array<LegacyCommitmentCiphertext>();
-    const legacyEncrpytedCommitments = new Array<LegacyEncryptedCommitment>();
-
-    const ciphertextStructs = data.ciphertext;
-    for (let i = 0; i < ciphertextStructs.length; ++i) {
-        const ciphertextStruct = ciphertextStructs[i];
-        const treePosition = data.startPosition + BigInt(i);
-        const id = idFrom2PaddedBigInts(data.treeNumber, treePosition);
-        const ciphertext = parseCiphertext(id, ciphertextStruct.ciphertext.map(ct => bigIntToPaddedHexString(ct)));
-        ciphertexts.push(ciphertext);
-
-        const legacyCommitmentCiphertext = new LegacyCommitmentCiphertext(
-            {
-                id,
-                ciphertext,
-                ephemeralKeys: ciphertextStruct.ephemeralKeys.map(key => bigIntToPaddedBytes(key)),
-                memo: ciphertextStruct.memo.map(memo => bigIntToPaddedBytes(memo)),
-            }
-        );
-        legacyCommitmentCiphertexts.push(legacyCommitmentCiphertext);
-
-        legacyEncrpytedCommitments.push(new LegacyEncryptedCommitment({
-            id,
-            blockNumber: BigInt(e.block.height),
-            blockTimestamp: BigInt(e.block.timestamp) / 1000n,
-            transactionHash: hexStringToBytes(e.transaction.hash),
-            treeNumber: Number(data.treeNumber),
-            batchStartTreePosition: Number(data.startPosition),
-            treePosition: Number(treePosition),
-            commitmentType: CommitmentType.LegacyEncryptedCommitment,
-            hash: data.hash[i],
-            ciphertext: legacyCommitmentCiphertext
-        }));
-    }
-
-    const id = idFrom2PaddedBigInts(BigInt(e.block.height), BigInt(e.transactionIndex));
-    await ctx.store.upsert(new CommitmentBatchEventNew({ id, treeNumber: data.treeNumber, batchStartTreePosition: data.startPosition }));
+    const output = new Nullifier({
+      actionType: ActionType.Nullifier,
+      id,
+      transaction,
+      treeNumber,
+      nullifier: nullifier.map(bigIntToPaddedBytes)
+    })
+    const action = await getAction(
+      e,
+      ctx,
+      ActionType.Nullifier,
+      transaction,
+   
+    );
+    action.nullifier = output;
+    await ctx.store.save(output)
+    await ctx.store.save(action);
 
     return {
-        ciphertexts,
-        lcc: legacyCommitmentCiphertexts,
-        lec: legacyEncrpytedCommitments,
-    };
+      nullified: output
+    }
+}
+
+export async function handleCommitmentBatch(
+  e: EvmProcessorLog, 
+  ctx: DataHandlerContext<Store>,
+  transaction: EVMTransaction
+): Promise<{
+    commitmentBatch: CommitmentBatch
+    ciphertext: Array<CommitmentBatchCiphertext>
+}> {
+
+    const data = events.CommitmentBatch.decode(e);
+    const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), ActionType.CommitmentBatch);
+    const [treeNumber, startPosition, hash, ciphertext] = data;
+
+    await ctx.store.save(transaction.actionStream)
+    await ctx.store.save(transaction)
+    const commitmentBatch = new CommitmentBatch({
+      actionType: ActionType.CommitmentBatch,
+      id,
+      treeNumber, 
+      startPosition, 
+      hash: hash.map(bigIntToPaddedBytes),
+      transaction
+    })
+    await ctx.store.save(commitmentBatch)
+    const innerCiphertexts = ciphertext.map(async c=>{
+        const [innerCiphertext, ephemeralKeys, innerMemo] = c;
+        const commitment = new CommitmentBatchCiphertext({
+            id,
+            batch: commitmentBatch,
+            ciphertext: innerCiphertext.map(bigIntToPaddedBytes),
+            ephemeralKeys: ephemeralKeys.map(bigIntToPaddedBytes),
+            memo: innerMemo.map(bigIntToPaddedBytes)
+        })
+        await ctx.store.save(commitment)
+        return commitment;
+    });
+
+
+    const ciphertexts = await Promise.all(innerCiphertexts);
+    commitmentBatch.ciphertext = ciphertexts;
+
+    const action = await getAction(
+      e,
+      ctx,
+      ActionType.CommitmentBatch,
+      transaction,
+  
+    );
+    action.commitmentBatch = commitmentBatch;
+    await ctx.store.save(commitmentBatch)
+    await ctx.store.save(action);
+    
+    return {
+        commitmentBatch,
+        ciphertext: ciphertexts
+    }
 }
 
 export async function handleGeneratedCommitmentBatch(
-    e: EvmProcessorLog,
-    ctx: DataHandlerContext<Store>
+  e: EvmProcessorLog,
+  ctx: DataHandlerContext<Store>,
+  transaction: EVMTransaction
 ): Promise<{
-    tokens: Map<string, Token>,
-    legacyGeneratedCommitments: Array<LegacyGeneratedCommitment>
-    commitmentPreImages: Array<CommitmentPreimage>
+  generatedCommitmentBatch: GeneratedCommitmentBatch
+  commitment: Array<GeneratedCommitmentBatchCommitment>
 }> {
     const data = events.GeneratedCommitmentBatch.decode(e);
-    const commitments = data.commitments;
+    const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), ActionType.GeneratedCommitmentBatch);
 
-    const tokens = new Map<string, Token>();
-    const legacyGeneratedCommitments = new Array<LegacyGeneratedCommitment>();
-    const commitmentPreImages = new Array<CommitmentPreimage>();
+    const [treeNumber, startPosition, commitments, encryptedRandom] = data;
 
-    for (let i = 0; i < commitments.length; i++) {
-        const commitment = commitments[i];
+    await ctx.store.save(transaction.actionStream)
+    await ctx.store.save(transaction)
 
-        const treePosition = data.startPosition + BigInt(i);
-        const id = idFrom2PaddedBigInts(data.treeNumber, treePosition);
+    const generatedCommitmentBatch = new GeneratedCommitmentBatch({
+      actionType: ActionType.GeneratedCommitmentBatch,
+      id,
+      treeNumber,
+      startPosition,
+      encryptedRandom: encryptedRandom.map(e=>e.map(bigIntToPaddedBytes)),
+      transaction
+    })
+    await ctx.store.save(generatedCommitmentBatch)
 
-        const { tokenType, tokenAddress, tokenSubID } = commitment.token;
-        const token = createToken(tokenType, tokenAddress, tokenSubID);
-        tokens.set(token.id, token);
+    const innerCommitments = commitments.map(async c=>{
+        const [npk, token, value] = c;
+        const { tokenType, tokenAddress, tokenSubID } = token;
+        const tokenData = createToken(tokenType, tokenAddress, tokenSubID);
+        await ctx.store.save(tokenData);
 
-        const preimage = new CommitmentPreimage({
+        const generatedCommitmentBatchCommitment = new GeneratedCommitmentBatchCommitment({
             id,
-            npk: hexStringToBytes(bigIntToPaddedHexString(commitment.npk)),
-            token,
-            value: commitment.value
-        });
+            batch: generatedCommitmentBatch,
+            npk,
+            token: tokenData,
+            value
+        })
+        await ctx.store.save(generatedCommitmentBatchCommitment)
+        return generatedCommitmentBatchCommitment
+    })
+    const _commitments = await Promise.all(innerCommitments)
+    generatedCommitmentBatch.commitments = _commitments
 
-        commitmentPreImages.push(preimage);
 
-        const commitmentHash = await getNoteHash(
-            ctx,
-            commitment.npk,
-            BigInt(token.id),
-            commitment.value,
-        );
-
-        const legacyGeneratedCommitment = new LegacyGeneratedCommitment({
-            id,
-            blockNumber: BigInt(e.block.height),
-            blockTimestamp: BigInt(e.block.timestamp) / 1000n,
-            transactionHash: hexStringToBytes(e.transaction.hash),
-            treeNumber: Number(data.treeNumber),
-            batchStartTreePosition: Number(data.startPosition),
-            treePosition: Number(treePosition),
-            commitmentType: CommitmentType.LegacyGeneratedCommitment,
-            hash: commitmentHash as bigint,
-            preimage,
-            encryptedRandom: data.encryptedRandom[i].map(random => bigIntToPaddedBytes(random)),
-        });
-        legacyGeneratedCommitments.push(legacyGeneratedCommitment);
+    const action = await getAction(
+      e,
+      ctx,
+      ActionType.GeneratedCommitmentBatch,
+      transaction,
+    );
+    action.generatedCommitmentBatch = generatedCommitmentBatch;
+    await ctx.store.save(generatedCommitmentBatch);
+    await ctx.store.save(action)
+    return {
+      generatedCommitmentBatch,
+      commitment: _commitments
     }
-
-    const id = idFrom2PaddedBigInts(BigInt(e.block.height), BigInt(e.transactionIndex));
-    await ctx.store.upsert(new CommitmentBatchEventNew({ id, treeNumber: data.treeNumber, batchStartTreePosition: data.startPosition }));
-
-    return { tokens, legacyGeneratedCommitments, commitmentPreImages };
 }
 
-export async function handleTransact(e: EvmProcessorLog, ctx: DataHandlerContext<Store>): Promise<{
-    ciphertexts: Array<Ciphertext>,
-    transactCommitments: Array<TransactCommitment>,
-    commitmentCiphertexts: Array<CommitmentCiphertext>
+export async function handleTransact(
+  e: EvmProcessorLog, 
+  ctx: DataHandlerContext<Store>,
+  transaction: EVMTransaction
+): Promise<{
+    transact: Transact,
+    ciphertext: Array<TransactCiphertext>
 }> {
     const data = events.Transact.decode(e);
-    const ciphertextStructs = data.ciphertext;
 
-    const ciphertexts = new Array<Ciphertext>();
-    const transactCommitments = new Array<TransactCommitment>();
-    const commitmentCiphertexts = new Array<CommitmentCiphertext>();
+    const [treeNumber, startPosition, hash, ciphertext] = data;
+    const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), ActionType.Transact);
 
-    for (let i = 0; i < ciphertextStructs.length; i++) {
-        const ciphertextStruct = ciphertextStructs[i];
 
-        const treePosition = data.startPosition + BigInt(i);
-        const id = idFrom2PaddedBigInts(data.treeNumber, treePosition);
-        const ciphertext = parseCiphertext(id, ciphertextStruct.ciphertext.map((ct) => padHexStringToEven(ct)));
-        ciphertexts.push(ciphertext);
+    await ctx.store.save(transaction.actionStream)
+    await ctx.store.save(transaction)
 
-        const commitmentCiphertext = new CommitmentCiphertext({
-            id,
+    const transact = new Transact({
+      actionType: ActionType.Transact,
+      id,
+      treeNumber,
+      startPosition,
+      hash: hash.map(hexStringToBytes),
+      transaction
+    })
+    await ctx.store.save(transact)
+    const innerCiphertext = ciphertext.map(async c=>{
+        const [
             ciphertext,
-            blindedSenderViewingKey: hexStringToBytes(ciphertextStruct.blindedSenderViewingKey),
-            blindedReceiverViewingKey: hexStringToBytes(ciphertextStruct.blindedReceiverViewingKey),
-            annotationData: hexStringToBytes(ciphertextStruct.annotationData),
-            memo: hexStringToBytes(ciphertextStruct.memo),
-        });
-        commitmentCiphertexts.push(commitmentCiphertext);
+            blindedSenderViewingKey,
+            blindedReceiverViewingKey,
+            annotationData,
+            memo,
+        ] = c;
 
-        transactCommitments.push(new TransactCommitment({
+        const transactionCiphertext = new TransactCiphertext({
             id,
-            blockNumber: BigInt(e.block.height),
-            blockTimestamp: BigInt(e.block.timestamp) / 1000n,
-            transactionHash: hexStringToBytes(e.transaction.hash),
-            treeNumber: Number(data.treeNumber),
-            batchStartTreePosition: Number(data.startPosition),
-            treePosition: Number(treePosition),
-            commitmentType: CommitmentType.TransactCommitment,
-            hash: BigInt(data.hash[i]),
-            ciphertext: commitmentCiphertext
-        }));
-    }
+            transact,
+            ciphertext: ciphertext.map(hexStringToBytes),
+            blindedSenderViewingKey: BigInt(blindedSenderViewingKey), // TODO: Check if we should use bytes here...
+            blindedReceiverViewingKey: BigInt(blindedReceiverViewingKey),
+            annotationData: BigInt(annotationData),
+            memo: BigInt(memo == "0x" ? '0x0' : memo)
+        })
+        await ctx.store.save(transactionCiphertext)
+        return transactionCiphertext;
+    });
+    const _ciphertext = await  Promise.all(innerCiphertext)
+    transact.ciphertext = _ciphertext
 
-    const id = idFrom2PaddedBigInts(BigInt(e.block.height), BigInt(e.transactionIndex));
-    await ctx.store.upsert(new CommitmentBatchEventNew({ id, treeNumber: data.treeNumber, batchStartTreePosition: data.startPosition }));
+    
+    const action = await getAction(
+      e,
+      ctx,
+      ActionType.Transact,
+      transaction,
+     
+    );
+    action.transact = transact;
+    await ctx.store.save(transact)
+    await ctx.store.save(action)
 
     return {
-        ciphertexts,
-        transactCommitments,
-        commitmentCiphertexts
-    };
+      transact,
+      ciphertext: _ciphertext
+    }
+
 }
 
-export function handleUnshield(e: EvmProcessorLog): {
-    token: Token,
+export async function handleUnshield(
+  e: EvmProcessorLog,
+  ctx: DataHandlerContext<Store>,
+  transaction: EVMTransaction
+): Promise< {
     unshield: Unshield
-} {
+}> {
     const data = events.Unshield.decode(e);
-    const id = idFromEventLogIndex(e);
 
-    const { tokenType, tokenAddress, tokenSubID } = data.token;
+    const [npk, innerToken, amount, fee] = data;
+    const { tokenType, tokenAddress, tokenSubID } = innerToken;
     const token = createToken(tokenType, tokenAddress, tokenSubID);
+    await ctx.store.save(token);
+    const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), ActionType.Unshield);
+
+    await ctx.store.save(transaction.actionStream)
+    await ctx.store.save(transaction)
 
     const unshield = new Unshield({
-        id,
-        blockNumber: BigInt(e.block.height),
-        blockTimestamp: BigInt(e.block.timestamp) / 1000n,
-        transactionHash: hexStringToBytes(e.transaction.hash),
-        to: hexStringToBytes(data.to),
-        token,
-        amount: data.amount,
-        fee: data.fee,
-        eventLogIndex: BigInt(e.logIndex)
+      actionType: ActionType.Unshield,
+      id,
+      npk: BigInt(npk),
+      token,
+      transaction,
+      amount,
+      fee
     })
 
-    return { token, unshield };
+    const action = await getAction(
+      e,
+      ctx,
+      ActionType.Unshield,
+      transaction,
+    );
+    action.unshield = unshield;
+    await ctx.store.save(unshield)
+    await ctx.store.save(action)
+
+    return {
+      unshield
+    }
 }
 
-export async function handleShield(e: EvmProcessorLog, ctx: any): Promise<{
-    tokens: Map<string, Token>,
-    commitmentPreimages: Array<CommitmentPreimage>
-    shieldCommitments: Array<ShieldCommitment>
+export async function handleShield(
+  e: EvmProcessorLog,
+  ctx: DataHandlerContext<Store>,
+  transaction: EVMTransaction
+): Promise<{
+    shield: Shield
+    ciphertext: Array<ShieldCiphertext>
+    commitment: Array<ShieldCommitment>
 }> {
     let data = null;
     if (e.topics[0] === events['Shield(uint256,uint256,(bytes32,(uint8,address,uint256),uint120)[],(bytes32[3],bytes32)[],uint256[])'].topic) {
@@ -273,62 +399,82 @@ export async function handleShield(e: EvmProcessorLog, ctx: any): Promise<{
     }
     else throw new Error("Undefined shield event");
 
-    const commitments = data.commitments;
-    let tokens = new Map<string, Token>();
-    let commitmentPreimages = new Array<CommitmentPreimage>();
-    let shieldCommitments = new Array<ShieldCommitment>();
+    const [treeNumber, startPosition, commitments, shieldCiphertext, fees] = data;
+    const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), ActionType.Shield);
 
-    for (let i = 0; i < commitments.length; i++) {
-        const commitment = commitments[i];
+    await ctx.store.save(transaction.actionStream)
+    await ctx.store.save(transaction)
 
-        const treePosition = data.startPosition + BigInt(i)
-        const id = idFrom2PaddedBigInts(data.treeNumber, treePosition);
+    const shield = new Shield({
+      actionType: ActionType.Shield,
+      id,
+      treeNumber,
+      startPosition,
+      transaction
+    })
 
-        const { tokenType, tokenAddress, tokenSubID } = commitment.token;
+    await ctx.store.save(shield);
+    const innerCommitments = commitments.map(async c=>{
+        const [npk, innerToken, value] = c;
+        const [tokenType, tokenAddress, tokenSubID] = innerToken;
         const token = createToken(tokenType, tokenAddress, tokenSubID);
-        tokens.set(token.id, token);
+        await ctx.store.save(token);
 
-        const preimage = new CommitmentPreimage({
+        const commitment = new ShieldCommitment({
             id,
-            npk: hexStringToBytes(commitment.npk),
+            shield,
+            npk: BigInt(npk), // TODO: Bytes?
             token,
-            value: commitment.value
-        });
-        commitmentPreimages.push(preimage);
+            value
+        })
+        await ctx.store.save(commitment)
+        return commitment;
+    });
 
-        const commitmentHash = await getNoteHash(
-            ctx,
-            BigInt(commitment.npk),
-            BigInt(token.id),
-            commitment.value,
-        );
-
-        // fee is not present in new LegacyShield
-        const fee = (data as any).fees ? (data as any).fees[i] : null;
-        const encryptedBundle = data.shieldCiphertext[i].encryptedBundle.map(bundle => bigIntToPad32Bytes(BigInt(bundle)));
-        const shieldCommitment = new ShieldCommitment({
+    const innerShieldCiphertexts = shieldCiphertext.map(async s=>{
+        const [encryptedBundle, shieldKey] = s;
+        const ciphertext = new ShieldCiphertext({
             id,
-            blockNumber: BigInt(e.block.height),
-            blockTimestamp: BigInt(e.block.timestamp) / 1000n,
-            transactionHash: hexStringToBytes(e.transaction.hash),
-            treeNumber: Number(data.treeNumber),
-            batchStartTreePosition: Number(data.startPosition),
-            treePosition: Number(treePosition),
-            commitmentType: CommitmentType.ShieldCommitment,
-            hash: commitmentHash as bigint,
-            preimage,
-            encryptedBundle,
-            shieldKey: hexStringToBytes(data.shieldCiphertext[i].shieldKey),
-            fee
-        });
-        shieldCommitments.push(shieldCommitment);
+            shield,
+            encryptedBundle: encryptedBundle.map(hexStringToBytes),
+            shieldKey: BigInt(shieldKey)
+        })
+        await ctx.store.save(ciphertext)
+        return ciphertext;
+    })
+
+    if(typeof fees !== 'undefined'){
+      // fix this to be auto array
+      if(Array.isArray(fees)){
+        const feeArr = fees as bigint[]
+        shield.fees = feeArr.map(e=>bigIntToPaddedBytes(e))
+      } else {
+        shield.fees = [bigIntToPaddedBytes(fees)]
+      }
+    } else {
+      shield.fees = []
     }
 
+    const _commitments = await Promise.all(innerCommitments);
+    const _ciphertexts = await Promise.all(innerShieldCiphertexts);
+    shield.commitments = _commitments
+    shield.shieldCiphertext = _ciphertexts
+
+    const action = await getAction(
+      e,
+      ctx,
+      ActionType.Shield,
+      transaction,
+    );
+    action.shield = shield;
+    await ctx.store.save(shield);
+    await ctx.store.save(action);
+
     return {
-        tokens,
-        commitmentPreimages,
-        shieldCommitments
-    };
+      shield,
+      ciphertext: _ciphertexts,
+      commitment: _commitments
+    }
 }
 
 /*

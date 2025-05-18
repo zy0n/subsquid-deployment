@@ -5,6 +5,10 @@
         "description": "delete all build artifacts",
         "cmd": ["npx", "--yes", "rimraf", "lib"]
       },
+      "dev": {
+        "description": "Run from a clean slate.",
+        "cmd": ["yarn", "dev"]
+      },
       "build": {
         "description": "Build the squid project",
         "deps": ["clean"],
@@ -25,11 +29,11 @@
       "migration:generate": {
         "description": "Generate a DB migration matching the TypeORM entities",
         "deps": ["build", "migration:clean"],
-        "cmd": ["squid-typeorm-migration", "generate"],
+        "cmd": ["squid-typeorm-migration", "generate"]
       },
       "migration:clean": {
         "description": "Clean the migrations folder",
-        "cmd": ["npx", "--yes", "rimraf", "./db/migrations"],
+        "cmd": ["npx", "--yes", "rimraf", "./db/migrations"]
       },
       "migration": {
         "deps": ["build"],
