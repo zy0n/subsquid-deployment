@@ -256,7 +256,7 @@ export async function handleTransact(
             blindedSenderViewingKey: BigInt(blindedSenderViewingKey), // TODO: Check if we should use bytes here...
             blindedReceiverViewingKey: BigInt(blindedReceiverViewingKey),
             annotationData: BigInt(annotationData),
-            memo: BigInt(memo)
+            memo: BigInt(memo == "0x" ? '0x0' : memo)
         })
         await ctx.store.save(transactionCiphertext)
         return transactionCiphertext;

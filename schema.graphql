@@ -91,7 +91,7 @@ type Shield @entity {
   transaction: EVMTransaction!
   commitments: [ShieldCommitment!]! @derivedFrom(field: "shield")
   shieldCiphertext: [ShieldCiphertext!]! @derivedFrom(field: "shield")
-  fees: [Bytes!]!
+  fees: [Bytes!]
 }
 
 type Transact @entity {
