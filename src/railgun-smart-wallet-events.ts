@@ -64,7 +64,7 @@ export async function getAction (
   transaction: EVMTransaction,
 ){
 
-  const id = entityIdFromBlockIndex(BigInt(e.block.height), 0n, `action`);
+  const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.logIndex), `action:${type}`);
   const action = new Action({
     id,
     type,
@@ -141,15 +141,6 @@ export async function handleNullifier(
    
     );
     action.nullifier = output;
-    //new Action({
-    //   id,
-    //   nullifier: output
-    // })
-    // if(typeof transaction.actions == 'undefined'){
-    //   transaction.actions = []
-    // }
-    // output.transaction.actions.push(action);
-    // await ctx.store.save(transaction)
     await ctx.store.save(output)
     await ctx.store.save(action);
 
@@ -207,13 +198,6 @@ export async function handleCommitmentBatch(
   
     );
     action.commitmentBatch = commitmentBatch;
-    // if(typeof transaction.actions == 'undefined'){
-    //   transaction.actions = []
-    // }
-    // commitmentBatch.transaction.actions.push(action);
-
-    // commitmentBatch.transaction.commitmentBatches.push(commitmentBatch)
-    // await ctx.store.save(transaction)
     await ctx.store.save(commitmentBatch)
     await ctx.store.save(action);
     
@@ -276,14 +260,6 @@ export async function handleGeneratedCommitmentBatch(
       transaction,
     );
     action.generatedCommitmentBatch = generatedCommitmentBatch;
-    // if(typeof transaction.actions == 'undefined'){
-    //   transaction.actions = []
-    // }
-    // generatedCommitmentBatch.transaction.actions.push(action);
-
-    // generatedCommitmentBatch.transaction.generatedCommitmentBatches.push(generatedCommitmentBatch)
-
-    // await ctx.store.save(transaction);
     await ctx.store.save(generatedCommitmentBatch);
     await ctx.store.save(action)
     return {
@@ -351,12 +327,6 @@ export async function handleTransact(
      
     );
     action.transact = transact;
-    // if(typeof transaction.actions == 'undefined'){
-    //   transaction.actions = []
-    // }
-    // transact.transaction.actions.push(action);
-    // transact.transaction.transacts.push(transact)
-    // await ctx.store.save(transaction);
     await ctx.store.save(transact)
     await ctx.store.save(action)
 
@@ -402,12 +372,6 @@ export async function handleUnshield(
       transaction,
     );
     action.unshield = unshield;
-    // if(typeof transaction.actions == 'undefined'){
-    //   transaction.actions = []
-    // }
-    // unshield.transaction.actions.push(action);
-    // unshield.transaction.unshields.push(unshield)
-    // await ctx.store.save(transaction)
     await ctx.store.save(unshield)
     await ctx.store.save(action)
 
@@ -502,13 +466,6 @@ export async function handleShield(
       transaction,
     );
     action.shield = shield;
-    // if(typeof transaction.actions == 'undefined'){
-    //   transaction.actions = []
-    // }
-    // shield.transaction.actions.push(action);
-    // shield.transaction.shields.push(shield)
-
-    // await ctx.store.save(transaction)
     await ctx.store.save(shield);
     await ctx.store.save(action);
 
