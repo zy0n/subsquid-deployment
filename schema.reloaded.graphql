@@ -65,6 +65,9 @@ type CommitmentBatch @entity {
   startPosition: Int!
   hash: [BigInt!]!
   ciphertext: [CommitmentBatchCiphertext!]!
+
+  # custom tagging
+  actionType: ActionType!
 }
 
 type GeneratedCommitmentBatch @entity {
@@ -73,6 +76,9 @@ type GeneratedCommitmentBatch @entity {
   startPosition: Int!
   commitments: [GeneratedCommitmentBatchCommitment!]!
   encryptedRandom: [[BigInt!]!]!
+
+  # custom tagging
+  actionType: ActionType!
 }
 
 type Shield @entity {
@@ -81,20 +87,37 @@ type Shield @entity {
   startPosition: Int!
   commitments: [ShieldCommitment!]!
   shieldCiphertext: [ShieldCiphertext!]!
+
+  # custom tagging
+  actionType: ActionType!
 }
 
+# technically this 'event' trigger is the only 
+# time transact is actually called... so in that. do we only need to
+# reference the rgbatch rgtxid here?
 type Transact @entity {
   id: ID! # TODO: decide id composition
   treeNumber: Int!
   startPosition: Int!
   hash: [BigInt!]!
   ciphertext: [TransactCiphertext!]!
+
+  # custom tagging
+  actionType: ActionType!
+
+  #custom extra fields
+  railgunBatchIndex: Int!
+  railgunTxidIndex: Int!
+}
 }
 
 type Nullifier @entity {
   id: ID! # TODO: decide id composition
   treeNumber: BigInt!
   nullifier: [BigInt!]! # TODO: check ability rename this (s)  
+
+  # custom tagging
+  actionType: ActionType!
 }
 
 type Unshield @entity {
@@ -103,4 +126,23 @@ type Unshield @entity {
   token: Token!
   amount: BigInt!
   fee: BigInt!
+
+  # custom tagging
+  actionType: ActionType!
+}
+
+union RailgunAction = CommitmentBatch | GeneratedCommitmentBatch | Shield | Transact | Nullifier | Unshield
+
+type EVMTransaction @entity {
+  id: ID! # TODO: decide id composition
+  transactionHash: Bytes!
+  actions: [RailgunAction!]!
+}
+
+interface Action @query {
+  id: ID! # TODO: decide id composition
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  blockHash: Bytes!
+  transactions: [EVMTransaction!]!
 }
