@@ -124,7 +124,7 @@ type Unshield @entity {
   fee: BigInt!
 }
 
-type Action @entity {
+type ActionStream @entity {
   id: ID!
   blockNumber: BigInt!
   blockTimestamp: BigInt!
