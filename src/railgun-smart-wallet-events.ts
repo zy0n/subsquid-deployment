@@ -10,7 +10,17 @@ import { createBasicToken, createToken, type BasicToken } from "./token";
 import { getNoteHash } from "./hash";
 import { DataHandlerContext } from "@subsquid/evm-processor";
 import { Store } from "@subsquid/typeorm-store";
-import { CommitmentBatch, CommitmentBatchCiphertext, EVMTransaction, Nullifier, GeneratedCommitmentBatch, GeneratedCommitmentBatchCommitment, Shield, ShieldCiphertext, ShieldCommitment, Transact, TransactCiphertext, Unshield } from "./model";
+import { CommitmentBatch, CommitmentBatchCiphertext, EVMTransaction, Nullifier, GeneratedCommitmentBatch, GeneratedCommitmentBatchCommitment, Shield, ShieldCiphertext, ShieldCommitment, Transact, TransactCiphertext, Unshield, ActionType } from "./model";
+
+export function entityIdFromBlockIndex(
+  blockNumber: bigint | number,
+  txIndex: bigint | number,
+  prefix?: string
+): string {
+  const pad = (x: bigint | number) => BigInt(x).toString(16).padStart(64, '0')
+  const id = `${pad(blockNumber)}${pad(txIndex)}`
+  return prefix ? `${prefix}:${id}` : id
+}
 
 function extractNullifierData(evmLog: any): { treeNumber: bigint, nullifier: bigint[] } {
     if (evmLog.topics[0] === events.Nullified.topic) {
@@ -29,12 +39,20 @@ function extractNullifierData(evmLog: any): { treeNumber: bigint, nullifier: big
 export function generateTransaction (
   e: EvmProcessorLog
 ) {
+  const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), 'transaction');
+
     return new EVMTransaction({
-      // id,
+      id,
       transactionHash: hexStringToBytes(e.transaction.hash),
       blockNumber: BigInt(e.block.height),
       blockHash: hexStringToBytes(e.block.hash),
-      blockTimestamp: BigInt(e.block.timestamp)
+      blockTimestamp: BigInt(e.block.timestamp),
+      commitmentBatches: [],
+      generatedCommitmentBatches: [],
+      shields: [],
+      transacts: [],
+      nullifiers: [],
+      unshields: []
     })
 }
 
@@ -54,22 +72,26 @@ export function generateTransaction (
 //     return cipherText;
 // }
 
-export function handleNullifier(e: EvmProcessorLog, transaction: EVMTransaction): {
+export function handleNullifier(
+  e: EvmProcessorLog, 
+  transaction: EVMTransaction
+): {
   nullified: Nullifier
 } {
     const data = extractNullifierData(e);
     const {treeNumber, nullifier} = data;
-    const id = idFrom2PaddedBigInts(BigInt(e.block.height), BigInt(e.transactionIndex));
+    const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), ActionType.Nullifier);
     // const transaction = new EVMTransaction({
     //   // id,
     //   transactionHash: hexStringToBytes(e.transaction.hash),
     // })
     // const transaction = generateTransaction(e);
     const output = new Nullifier({
-        // id,
-        transaction,
-        treeNumber,
-        nullifier: nullifier.map(bigIntToPaddedBytes)
+      actionType: ActionType.Nullifier,
+      id,
+      transaction,
+      treeNumber,
+      nullifier: nullifier.map(bigIntToPaddedBytes)
     })
     output.transaction.nullifiers.push(output);
     // console.log('Nullifier', output)
@@ -97,13 +119,16 @@ export function handleNullifier(e: EvmProcessorLog, transaction: EVMTransaction)
     // return nullified;
 }
 
-export async function handleCommitmentBatch(e: EvmProcessorLog, ctx: DataHandlerContext<Store>, transaction: EVMTransaction): Promise<{
+export async function handleCommitmentBatch(
+  e: EvmProcessorLog, 
+  transaction: EVMTransaction
+): Promise<{
     commitmentBatch: CommitmentBatch
     ciphertext: Array<CommitmentBatchCiphertext>
 }> {
 
     const data = events.CommitmentBatch.decode(e);
-    const id = idFrom2PaddedBigInts(BigInt(e.block.height), BigInt(e.transactionIndex));
+    const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), ActionType.CommitmentBatch);
 
     // const transaction = new EVMTransaction({
     //   // id,
@@ -116,7 +141,8 @@ export async function handleCommitmentBatch(e: EvmProcessorLog, ctx: DataHandler
     const [treeNumber, startPosition, hash, ciphertext] = data;
 
     const output = {
-      // id,
+      actionType: ActionType.CommitmentBatch,
+      id,
       blockNumber: BigInt(e.block.height),
       treeNumber, 
       startPosition, 
@@ -131,7 +157,7 @@ export async function handleCommitmentBatch(e: EvmProcessorLog, ctx: DataHandler
         // console.log(innerCiphertext)
         // const [iv, tag, data, data2] = innerCiphertext;
         return new CommitmentBatchCiphertext({
-            // id,
+            id,
             batch: commitmentBatch,
             ciphertext: innerCiphertext.map(bigIntToPaddedBytes),
             ephemeralKeys: ephemeralKeys.map(bigIntToPaddedBytes),
@@ -198,21 +224,24 @@ export async function handleCommitmentBatch(e: EvmProcessorLog, ctx: DataHandler
 }
 
 export async function handleGeneratedCommitmentBatch(
-    e: EvmProcessorLog,
-    ctx: DataHandlerContext<Store>
+  e: EvmProcessorLog,
+  transaction: EVMTransaction
 ): Promise<{
   generatedCommitmentBatch: GeneratedCommitmentBatch
   commitment: Array<GeneratedCommitmentBatchCommitment>
 }> {
     const data = events.GeneratedCommitmentBatch.decode(e);
+    const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), ActionType.GeneratedCommitmentBatch);
 
     // const transaction = new EVMTransaction({
     //   transactionHash: hexStringToBytes(e.transaction.hash),
     // })
-    const transaction = generateTransaction(e);
+    // const transaction = generateTransaction(e);
 
     const [treeNumber, startPosition, commitments, encryptedRandom] = data;
     const generatedCommitmentBatch = new GeneratedCommitmentBatch({
+      actionType: ActionType.GeneratedCommitmentBatch,
+      id,
       treeNumber,
       startPosition,
       encryptedRandom: encryptedRandom.map(e=>e.map(bigIntToPaddedBytes)),
@@ -225,12 +254,15 @@ export async function handleGeneratedCommitmentBatch(
         const { tokenType, tokenAddress, tokenSubID } = token;
         const tokenData = createToken(tokenType, tokenAddress, tokenSubID);
         return new GeneratedCommitmentBatchCommitment({
+            id,
             batch: generatedCommitmentBatch,
             npk,
             token: tokenData,
             value
         })
     })
+    console.log(generatedCommitmentBatch)
+
     generatedCommitmentBatch.commitments = innerCommitments
     generatedCommitmentBatch.transaction.generatedCommitmentBatches.push(generatedCommitmentBatch)
 
@@ -301,22 +333,25 @@ export async function handleGeneratedCommitmentBatch(
     // return { tokens, legacyGeneratedCommitments, commitmentPreImages };
 }
 
-export async function handleTransact(e: EvmProcessorLog, ctx: DataHandlerContext<Store>): Promise<{
-    // ciphertexts: Array<Ciphertext>,
-    // transactCommitments: Array<TransactCommitment>,
-    // commitmentCiphertexts: Array<CommitmentCiphertext>
+export async function handleTransact(
+  e: EvmProcessorLog, 
+  transaction: EVMTransaction
+): Promise<{
     transact: Transact,
     ciphertext: Array<TransactCiphertext>
 }> {
     const data = events.Transact.decode(e);
 
     const [treeNumber, startPosition, hash, ciphertext] = data;
+    const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), ActionType.Transact);
 
-    const transaction = new EVMTransaction({
-      transactionHash: hexStringToBytes(e.transaction.hash),
-    })
+    // const transaction = new EVMTransaction({
+    //   transactionHash: hexStringToBytes(e.transaction.hash),
+    // })
 
     const transact = new Transact({
+      actionType: ActionType.Transact,
+      id,
       treeNumber,
       startPosition,
       hash: hash.map(hexStringToBytes),
@@ -333,6 +368,7 @@ export async function handleTransact(e: EvmProcessorLog, ctx: DataHandlerContext
         ] = c;
 
         return new TransactCiphertext({
+            id,
             transact,
             ciphertext: ciphertext.map(hexStringToBytes),
             blindedSenderViewingKey: BigInt(blindedSenderViewingKey), // TODO: Check if we should use bytes here...
@@ -406,7 +442,10 @@ export async function handleTransact(e: EvmProcessorLog, ctx: DataHandlerContext
     // };
 }
 
-export function handleUnshield(e: EvmProcessorLog): {
+export function handleUnshield(
+  e: EvmProcessorLog,
+  transaction: EVMTransaction
+): {
     unshield: Unshield
 } {
     const data = events.Unshield.decode(e);
@@ -414,10 +453,13 @@ export function handleUnshield(e: EvmProcessorLog): {
     const [npk, innerToken, amount, fee] = data;
     const { tokenType, tokenAddress, tokenSubID } = innerToken;
     const token = createToken(tokenType, tokenAddress, tokenSubID);
+    const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), ActionType.Unshield);
 
-    const transaction = generateTransaction(e);
+    // const transaction = generateTransaction(e);
 
     const unshield = new Unshield({
+      actionType: ActionType.Unshield,
+      id,
       npk: BigInt(npk),
       token,
       transaction,
@@ -457,7 +499,10 @@ export function handleUnshield(e: EvmProcessorLog): {
     // return { token, unshield };
 }
 
-export async function handleShield(e: EvmProcessorLog, ctx: any): Promise<{
+export async function handleShield(
+  e: EvmProcessorLog,
+  transaction: EVMTransaction
+): Promise<{
     // tokens: Map<string, Token>,
     // commitmentPreimages: Array<CommitmentPreimage>
     // shieldCommitments: Array<ShieldCommitment>
@@ -476,10 +521,13 @@ export async function handleShield(e: EvmProcessorLog, ctx: any): Promise<{
     }
     else throw new Error("Undefined shield event");
 
-    const transaction = generateTransaction(e)
+    // const transaction = generateTransaction(e)
     const [treeNumber, startPosition, commitments, shieldCiphertext, fees] = data;
+    const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), ActionType.Shield);
 
     const shield = new Shield({
+      actionType: ActionType.Shield,
+      id,
       treeNumber,
       startPosition,
       transaction
@@ -491,6 +539,7 @@ export async function handleShield(e: EvmProcessorLog, ctx: any): Promise<{
         const [tokenType, tokenAddress, tokenSubID] = innerToken;
         const token = createToken(tokenType, tokenAddress, tokenSubID);
         return new ShieldCommitment({
+            id,
             shield,
             npk: BigInt(npk), // TODO: Bytes?
             token,
@@ -501,6 +550,7 @@ export async function handleShield(e: EvmProcessorLog, ctx: any): Promise<{
     const innerShieldCiphertexts = shieldCiphertext.map(s=>{
         const [encryptedBundle, shieldKey] = s;
         return new ShieldCiphertext({
+            id,
             shield,
             encryptedBundle: encryptedBundle.map(hexStringToBytes),
             shieldKey: BigInt(shieldKey)
@@ -536,6 +586,8 @@ export async function handleShield(e: EvmProcessorLog, ctx: any): Promise<{
       }
         // output.fees = fees as any
         // console.log("SHIELD", output)
+    } else {
+      shield.fees = []
     }
 
 

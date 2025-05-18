@@ -83,8 +83,6 @@ type GeneratedCommitmentBatch @entity {
   encryptedRandom: [[Bytes!]!]!
 }
 
-union Fees = Bytes | [Bytes]
-
 type Shield @entity {
   id: ID!
   actionType: ActionType!
@@ -93,7 +91,7 @@ type Shield @entity {
   transaction: EVMTransaction!
   commitments: [ShieldCommitment!]! @derivedFrom(field: "shield")
   shieldCiphertext: [ShieldCiphertext!]! @derivedFrom(field: "shield")
-  fees: Fees!
+  fees: [Bytes!]!
 }
 
 type Transact @entity {
