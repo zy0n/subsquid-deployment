@@ -78,7 +78,7 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
           break;
         case events.Unshield.topic:
           {
-            const { unshield } = handleUnshield(e, ctx, transaction)
+            const { unshield } = await handleUnshield(e, ctx, transaction)
             Unshields.push(unshield);
           } break;
         case events['Shield(uint256,uint256,(bytes32,(uint8,address,uint256),uint120)[],(bytes32[3],bytes32)[])'].topic:
@@ -141,31 +141,31 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
 
 // base records that other tables depend on
   // Step 1: Ciphertexts and other non-dependent base entries
-  await Promise.all([
-    ctx.store.upsert(Nullifiers),
-    ctx.store.upsert(TransactCiphertexts),
-    ctx.store.upsert(ShieldCiphertexts),
-    ctx.store.upsert(CommitmentBatchCiphertexts),
-  ]);
+  // await Promise.all([
+  //   ctx.store.upsert(Nullifiers),
+  //   ctx.store.upsert(TransactCiphertexts),
+  //   ctx.store.upsert(ShieldCiphertexts),
+  //   ctx.store.upsert(CommitmentBatchCiphertexts),
+  // ]);
 
-  // Step 2: Primary batches that are required by commitments
-  await Promise.all([
-    ctx.store.upsert(GeneratedCommitmentBatches), // ✅ must come before GCBCommitments
-    ctx.store.upsert(CommitmentBatches),
-  ]);
+  // // Step 2: Primary batches that are required by commitments
+  // await Promise.all([
+  //   ctx.store.upsert(GeneratedCommitmentBatches), // ✅ must come before GCBCommitments
+  //   ctx.store.upsert(CommitmentBatches),
+  // ]);
 
-  // Step 3: Commitment records that rely on batches
-  await Promise.all([
-    ctx.store.upsert(GeneratedCommitmentBatchCommitments),
-    ctx.store.upsert(ShieldCommitments), // Assumes ShieldCiphertexts already inserted
-  ]);
+  // // Step 3: Commitment records that rely on batches
+  // await Promise.all([
+  //   ctx.store.upsert(GeneratedCommitmentBatchCommitments),
+  //   ctx.store.upsert(ShieldCommitments), // Assumes ShieldCiphertexts already inserted
+  // ]);
 
-  // Step 4: Operations
-  await Promise.all([
-    ctx.store.upsert(Shields),
-    ctx.store.upsert(Unshields),
-    ctx.store.upsert(Transactions),
-    ctx.store.upsert(Transacts),
-  ]);
+  // // Step 4: Operations
+  // await Promise.all([
+  //   ctx.store.upsert(Shields),
+  //   ctx.store.upsert(Unshields),
+  //   ctx.store.upsert(Transactions),
+  //   ctx.store.upsert(Transacts),
+  // ]);
 
 })

@@ -20,7 +20,7 @@ export function entityIdFromBlockIndex(
   const pad = (x: bigint | number) => BigInt(x).toString(16).padStart(64, '0')
   const id = `${pad(blockNumber)}${pad(txIndex)}`
   const output =  prefix ? `${prefix}:${id}` : id;
-  console.log('OUTPUT', output)
+  // console.log('OUTPUT', output)
 
   return output
 }
@@ -44,8 +44,7 @@ export function generateTransaction (
   ctx: DataHandlerContext<Store>,
 ) {
   const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), 'transaction');
-
-    return new EVMTransaction({
+  const transaction = new EVMTransaction({
       id,
       transactionHash: hexStringToBytes(e.transaction.hash),
       blockNumber: BigInt(e.block.height),
@@ -58,6 +57,8 @@ export function generateTransaction (
       nullifiers: [],
       unshields: []
     })
+    ctx.store.upsert(transaction)
+    return transaction;
 }
 
 // /*
@@ -98,6 +99,7 @@ export function handleNullifier(
       treeNumber,
       nullifier: nullifier.map(bigIntToPaddedBytes)
     })
+    ctx.store.upsert(output)
     output.transaction.nullifiers.push(output);
     // console.log('Nullifier', output)
 
@@ -157,27 +159,30 @@ export async function handleCommitmentBatch(
     }
 
     const commitmentBatch = new CommitmentBatch(output)
-
-    const innerCiphertexts = ciphertext.map(c=>{
+    await ctx.store.upsert(commitmentBatch)
+    const innerCiphertexts = ciphertext.map(async c=>{
         const [innerCiphertext, ephemeralKeys, innerMemo] = c;
         // console.log(innerCiphertext)
         // const [iv, tag, data, data2] = innerCiphertext;
-        return new CommitmentBatchCiphertext({
+        const commitment = new CommitmentBatchCiphertext({
             id,
             batch: commitmentBatch,
             ciphertext: innerCiphertext.map(bigIntToPaddedBytes),
             ephemeralKeys: ephemeralKeys.map(bigIntToPaddedBytes),
             memo: innerMemo.map(bigIntToPaddedBytes)
         })
+        await ctx.store.upsert(commitment)
+        return commitment;
     });
 
 
-
-    commitmentBatch.ciphertext = innerCiphertexts;
+    const ciphertexts = await Promise.all(innerCiphertexts);
+    commitmentBatch.ciphertext = ciphertexts;
     commitmentBatch.transaction.commitmentBatches.push(commitmentBatch)
+    await ctx.store.upsert(commitmentBatch)
     return {
         commitmentBatch,
-        ciphertext: innerCiphertexts
+        ciphertext: ciphertexts
     }
     // return output;
 
@@ -254,29 +259,34 @@ export async function handleGeneratedCommitmentBatch(
       encryptedRandom: encryptedRandom.map(e=>e.map(bigIntToPaddedBytes)),
       transaction
     })
+    await ctx.store.upsert(generatedCommitmentBatch)
 
-
-    const innerCommitments = commitments.map(c=>{
+    const innerCommitments = commitments.map(async c=>{
         const [npk, token, value] = c;
         const { tokenType, tokenAddress, tokenSubID } = token;
         const tokenData = createToken(tokenType, tokenAddress, tokenSubID);
-        return new GeneratedCommitmentBatchCommitment({
+        await ctx.store.upsert(tokenData);
+
+        const generatedCommitmentBatchCommitment = new GeneratedCommitmentBatchCommitment({
             id,
             batch: generatedCommitmentBatch,
             npk,
             token: tokenData,
             value
         })
+        await ctx.store.upsert(generatedCommitmentBatchCommitment)
+        return generatedCommitmentBatchCommitment
     })
-    
-    generatedCommitmentBatch.commitments = innerCommitments
+    const _commitments = await Promise.all(innerCommitments)
+    generatedCommitmentBatch.commitments = _commitments
     generatedCommitmentBatch.transaction.generatedCommitmentBatches.push(generatedCommitmentBatch)
     console.log(generatedCommitmentBatch)
 
+    await ctx.store.upsert(generatedCommitmentBatch);
 
     return {
       generatedCommitmentBatch,
-      commitment: innerCommitments
+      commitment: _commitments
     }
     // const output = {
     //     treeNumber,
@@ -365,8 +375,8 @@ export async function handleTransact(
       hash: hash.map(hexStringToBytes),
       transaction
     })
-
-    const innerCiphertext = ciphertext.map(c=>{
+    await ctx.store.upsert(transact)
+    const innerCiphertext = ciphertext.map(async c=>{
         const [
             ciphertext,
             blindedSenderViewingKey,
@@ -375,7 +385,7 @@ export async function handleTransact(
             memo,
         ] = c;
 
-        return new TransactCiphertext({
+        const transactionCiphertext = new TransactCiphertext({
             id,
             transact,
             ciphertext: ciphertext.map(hexStringToBytes),
@@ -384,8 +394,11 @@ export async function handleTransact(
             annotationData: BigInt(annotationData),
             memo: BigInt(memo)
         })
+        await ctx.store.upsert(transactionCiphertext)
+        return transactionCiphertext;
     });
-    transact.ciphertext = innerCiphertext
+    const _ciphertext = await  Promise.all(innerCiphertext)
+    transact.ciphertext = _ciphertext
     transact.transaction.transacts.push(transact)
 
     // const output = {
@@ -397,7 +410,7 @@ export async function handleTransact(
 
     return {
       transact,
-      ciphertext: innerCiphertext
+      ciphertext: _ciphertext
     }
 
     // console.log("Transact", output)
@@ -450,18 +463,19 @@ export async function handleTransact(
     // };
 }
 
-export function handleUnshield(
+export async function handleUnshield(
   e: EvmProcessorLog,
   ctx: DataHandlerContext<Store>,
   transaction: EVMTransaction
-): {
+): Promise< {
     unshield: Unshield
-} {
+}> {
     const data = events.Unshield.decode(e);
 
     const [npk, innerToken, amount, fee] = data;
     const { tokenType, tokenAddress, tokenSubID } = innerToken;
     const token = createToken(tokenType, tokenAddress, tokenSubID);
+    await ctx.store.upsert(token);
     const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), ActionType.Unshield);
 
     // const transaction = generateTransaction(e);
@@ -476,6 +490,7 @@ export function handleUnshield(
       fee
     })
     unshield.transaction.unshields.push(unshield)
+    await ctx.store.upsert(unshield)
     // const output = {
     //     npk, 
     //     token,
@@ -543,28 +558,34 @@ export async function handleShield(
       transaction
     })
 
-
-    const innerCommitments = commitments.map(c=>{
+    await ctx.store.upsert(shield);
+    const innerCommitments = commitments.map(async c=>{
         const [npk, innerToken, value] = c;
         const [tokenType, tokenAddress, tokenSubID] = innerToken;
         const token = createToken(tokenType, tokenAddress, tokenSubID);
-        return new ShieldCommitment({
+        await ctx.store.upsert(token);
+
+        const commitment = new ShieldCommitment({
             id,
             shield,
             npk: BigInt(npk), // TODO: Bytes?
             token,
             value
         })
+        await ctx.store.upsert(commitment)
+        return commitment;
     });
 
-    const innerShieldCiphertexts = shieldCiphertext.map(s=>{
+    const innerShieldCiphertexts = shieldCiphertext.map(async s=>{
         const [encryptedBundle, shieldKey] = s;
-        return new ShieldCiphertext({
+        const ciphertext = new ShieldCiphertext({
             id,
             shield,
             encryptedBundle: encryptedBundle.map(hexStringToBytes),
             shieldKey: BigInt(shieldKey)
         })
+        await ctx.store.upsert(ciphertext)
+        return ciphertext;
     })
 
 
@@ -600,16 +621,17 @@ export async function handleShield(
       shield.fees = []
     }
 
-
-    shield.commitments = innerCommitments
-    shield.shieldCiphertext = innerShieldCiphertexts
+    const _commitments = await Promise.all(innerCommitments);
+    const _ciphertexts = await Promise.all(innerShieldCiphertexts);
+    shield.commitments = _commitments
+    shield.shieldCiphertext = _ciphertexts
     shield.transaction.shields.push(shield)
 
 
     return {
       shield,
-      ciphertext: innerShieldCiphertexts,
-      commitment: innerCommitments
+      ciphertext: _ciphertexts,
+      commitment: _commitments
     }
 
     // let tokens = new Map<string, Token>();
