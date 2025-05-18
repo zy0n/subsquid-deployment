@@ -7,7 +7,6 @@ enum ActionType {
   Unshield
 }
 
-# Sync with TS enum in railgun-smart-wallet.ts
 enum TokenType {
   ERC20
   ERC721
@@ -15,41 +14,46 @@ enum TokenType {
 }
 
 type Token @entity {
-  id: ID! # output of getTokenID()
+  id: ID!
   tokenType: TokenType!
-  tokenAddress: Bytes! #address
+  tokenAddress: Bytes!
   tokenSubID: ID!
 }
 
 type CommitmentBatchCiphertext @entity {
-  id: ID! # TODO: decide id composition
+  id: ID!
+  batch: CommitmentBatch! # ✅ Parent ref
   ciphertext: [BigInt!]!
   ephemeralKeys: [BigInt!]!
   memo: [BigInt!]!
 }
 
 type GeneratedCommitmentBatchCommitment @entity {
-  id: ID! # TODO: decide id composition
+  id: ID!
+  batch: GeneratedCommitmentBatch! # ✅ Parent ref
   npk: BigInt!
   token: Token!
   value: BigInt!
 }
 
-# TODO: same as above, determine usefulness of separation.
 type ShieldCommitment @entity {
-  id: ID! # TODO: decide id composition
+  id: ID!
+  shield: Shield! # ✅ Parent ref
   npk: BigInt!
   token: Token!
   value: BigInt!
 }
 
 type ShieldCiphertext @entity {
+  id: ID!
+  shield: Shield! # ✅ Parent ref
   encryptedBundle: [BigInt!]!
   shieldKey: BigInt!
 }
 
 type TransactCiphertext @entity {
-  id: ID! # TODO: decide id composition
+  id: ID!
+  transact: Transact! # ✅ Parent ref
   ciphertext: [BigInt!]!
   blindedSenderViewingKey: BigInt!
   blindedReceiverViewingKey: BigInt!
@@ -57,91 +61,100 @@ type TransactCiphertext @entity {
   memo: BigInt!
 }
 
-# Actions 
-type CommitmentBatch @entity {
-  id: ID! # TODO: decide id composition
+interface Action {
+  id: ID!
+  actionType: ActionType!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  blockHash: Bytes!
+  transactions: [EVMTransaction!]!
+}
+
+type CommitmentBatch implements Action @entity {
+  id: ID!
+  actionType: ActionType!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  blockHash: Bytes!
   treeNumber: Int!
   startPosition: Int!
   hash: [BigInt!]!
-  ciphertext: [CommitmentBatchCiphertext!]! @derivedFrom(field: "id")
-
-  # custom tagging
-  actionType: ActionType!
+  ciphertext: [CommitmentBatchCiphertext!]! @derivedFrom(field: "batch")
+  transactions: [EVMTransaction!]! @derivedFrom(field: "actions")
 }
 
-type GeneratedCommitmentBatch @entity {
-  id: ID! # TODO: decide id composition
+type GeneratedCommitmentBatch implements Action @entity {
+  id: ID!
+  actionType: ActionType!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  blockHash: Bytes!
   treeNumber: Int!
   startPosition: Int!
-  commitments: [GeneratedCommitmentBatchCommitment!]! @derivedFrom(field: "id")
+  commitments: [GeneratedCommitmentBatchCommitment!]! @derivedFrom(field: "batch")
   encryptedRandom: [[BigInt!]!]!
-
-  # custom tagging
-  actionType: ActionType!
+  transactions: [EVMTransaction!]! @derivedFrom(field: "actions")
 }
 
-type Shield @entity {
-  id: ID! # TODO: decide id composition
+type Shield implements Action @entity {
+  id: ID!
+  actionType: ActionType!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  blockHash: Bytes!
   treeNumber: Int!
   startPosition: Int!
-  commitments: [ShieldCommitment!]! @derivedFrom(field: "id")
-  shieldCiphertext: [ShieldCiphertext!]! @derivedFrom(field: "id")
-
-  # custom tagging
-  actionType: ActionType!
+  commitments: [ShieldCommitment!]! @derivedFrom(field: "shield")
+  shieldCiphertext: [ShieldCiphertext!]! @derivedFrom(field: "shield")
+  transactions: [EVMTransaction!]! @derivedFrom(field: "actions")
 }
 
-# technically this 'event' trigger is the only 
-# time transact is actually called... so in that. do we only need to
-# reference the rgbatch rgtxid here?
-type Transact @entity {
-  id: ID! # TODO: decide id composition
+type Transact implements Action @entity {
+  id: ID!
+  actionType: ActionType!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  blockHash: Bytes!
   treeNumber: Int!
   startPosition: Int!
   hash: [BigInt!]!
-  ciphertext: [TransactCiphertext!]! @derivedFrom(field: "id")
-
-  # custom tagging
-  actionType: ActionType!
-
-  #custom extra fields
+  ciphertext: [TransactCiphertext!]! @derivedFrom(field: "transact")
   railgunBatchIndex: Int!
   railgunTxidIndex: Int!
+  transactions: [EVMTransaction!]! @derivedFrom(field: "actions")
 }
 
-
-type Nullifier @entity {
-  id: ID! # TODO: decide id composition
-  treeNumber: BigInt!
-  nullifier: [BigInt!]! # TODO: check ability rename this (s)  
-
-  # custom tagging
+type Nullifier implements Action @entity {
+  id: ID!
   actionType: ActionType!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  blockHash: Bytes!
+  treeNumber: BigInt!
+  nullifier: [BigInt!]!
+  transactions: [EVMTransaction!]! @derivedFrom(field: "actions")
 }
 
-type Unshield @entity {
-  id: ID! # TODO: decide id composition
+type Unshield implements Action @entity {
+  id: ID!
+  actionType: ActionType!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  blockHash: Bytes!
   npk: BigInt!
   token: Token!
   amount: BigInt!
   fee: BigInt!
-
-  # custom tagging
-  actionType: ActionType!
+  transactions: [EVMTransaction!]! @derivedFrom(field: "actions")
 }
-
-union RailgunAction = CommitmentBatch | GeneratedCommitmentBatch | Shield | Transact | Nullifier | Unshield
 
 type EVMTransaction @entity {
-  id: ID! # TODO: decide id composition
-  transactionHash: Bytes!
-  actions: [RailgunAction!]! @derivedFrom(field: "id")
-}
+  id: ID!
 
-interface Action @query {
-  id: ID! # TODO: decide id composition
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  blockHash: Bytes!
-  transactions: [EVMTransaction!]! @derivedFrom(field: "id")
+  commitmentBatches: [CommitmentBatch!]! @derivedFrom(field: "transaction")
+  generatedCommitmentBatches: [GeneratedCommitmentBatch!]! @derivedFrom(field: "transaction")
+  shields: [Shield!]! @derivedFrom(field: "transaction")
+  transacts: [Transact!]! @derivedFrom(field: "transaction")
+  nullifiers: [Nullifier!]! @derivedFrom(field: "transaction")
+  unshields: [Unshield!]! @derivedFrom(field: "transaction")
 }
