@@ -15,19 +15,19 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
   if (contractAddress.length == 0)
     throw new Error("Invalid contract address");
 
-  let Nullifiers = new Array<Nullifier>();
-  let CommitmentBatches = new Array<CommitmentBatch>();
-  let CommitmentBatchCiphertexts = new Array<CommitmentBatchCiphertext>();
-  let GeneratedCommitmentBatches = new Array<GeneratedCommitmentBatch>();
-  let GeneratedCommitmentBatchCommitments = new Array<GeneratedCommitmentBatchCommitment>();
-  let Transacts = new Array<Transact>()
-  let TransactCiphertexts = new Array<TransactCiphertext>();
-  let Unshields = new Array<Unshield>();
-  let Shields = new Array<Shield>();
-  let ShieldCiphertexts = new Array<ShieldCiphertext>();
-  let ShieldCommitments = new Array<ShieldCommitment>();
+  // let Nullifiers = new Array<Nullifier>();
+  // let CommitmentBatches = new Array<CommitmentBatch>();
+  // let CommitmentBatchCiphertexts = new Array<CommitmentBatchCiphertext>();
+  // let GeneratedCommitmentBatches = new Array<GeneratedCommitmentBatch>();
+  // let GeneratedCommitmentBatchCommitments = new Array<GeneratedCommitmentBatchCommitment>();
+  // let Transacts = new Array<Transact>()
+  // let TransactCiphertexts = new Array<TransactCiphertext>();
+  // let Unshields = new Array<Unshield>();
+  // let Shields = new Array<Shield>();
+  // let ShieldCiphertexts = new Array<ShieldCiphertext>();
+  // let ShieldCommitments = new Array<ShieldCommitment>();
 
-  let Transactions = new Array<EVMTransaction>();
+  // let Transactions = new Array<EVMTransaction>();
 
 
   // let LegacyCommitmentCiphertexts = new Array<LegacyCommitmentCiphertext>();
@@ -62,47 +62,47 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
         case events.Nullified.topic:
         case events.Nullifiers.topic:
           const extractedNullifier = await handleNullifier(e, ctx, transaction)
-          Nullifiers.push(extractedNullifier.nullified)
+          // Nullifiers.push(extractedNullifier.nullified)
           break;
         case events.CommitmentBatch.topic: 
           {
             const { commitmentBatch, ciphertext } = await handleCommitmentBatch(e, ctx, transaction);
-            CommitmentBatches.push(commitmentBatch)
-            CommitmentBatchCiphertexts.push(...ciphertext)
+            // CommitmentBatches.push(commitmentBatch)
+            // CommitmentBatchCiphertexts.push(...ciphertext)
           }
           break;
         case events.GeneratedCommitmentBatch.topic:
           {
             const { generatedCommitmentBatch, commitment } = await handleGeneratedCommitmentBatch(e, ctx, transaction);
           
-            GeneratedCommitmentBatches.push(generatedCommitmentBatch);
-            GeneratedCommitmentBatchCommitments.push(...commitment);
+            // GeneratedCommitmentBatches.push(generatedCommitmentBatch);
+            // GeneratedCommitmentBatchCommitments.push(...commitment);
           } break;
         case events.Transact.topic:
           {
             const { transact, ciphertext } = await handleTransact(e, ctx, transaction);
-            Transacts.push(transact);
-            TransactCiphertexts.push(...ciphertext)
+            // Transacts.push(transact);
+            // TransactCiphertexts.push(...ciphertext)
           }
           break;
         case events.Unshield.topic:
           {
             const { unshield } = await handleUnshield(e, ctx, transaction)
-            Unshields.push(unshield);
+            // Unshields.push(unshield);
           } break;
         case events['Shield(uint256,uint256,(bytes32,(uint8,address,uint256),uint120)[],(bytes32[3],bytes32)[])'].topic:
         case events['Shield(uint256,uint256,(bytes32,(uint8,address,uint256),uint120)[],(bytes32[3],bytes32)[],uint256[])'].topic:
           {
             const { shield, commitment, ciphertext } = await handleShield(e, ctx, transaction);
-            Shields.push(shield)
-            ShieldCommitments.push(...commitment);
-            ShieldCiphertexts.push(...ciphertext)
+            // Shields.push(shield)
+            // ShieldCommitments.push(...commitment);
+            // ShieldCiphertexts.push(...ciphertext)
           } break;
       }
       // if(transaction.actions.length > 0){
         // console.log()
         // console.log('length', transaction.actions.length)
-        Transactions.push(transaction)
+        // Transactions.push(transaction)
         // actionStream.transactions.push(transaction)
         // await ctx.store.save(actionStream)
       // } 
@@ -134,24 +134,24 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
     //             throw new Error(`Unhandled sighash: ${tcs.action.sighash}`);
     //     }
     // }
-  }
+  // }
 
-  if (ENABLE_LOG) {
-    console.log("Inserting data...");
-    console.table({
-      Nullifier: Nullifiers.length,
-      CommitmentBatch: CommitmentBatches.length,
-      CommitmentBatchCiphertext: CommitmentBatchCiphertexts.length,
-      GeneratedCommitmentBatch: GeneratedCommitmentBatches.length,
-      GeneratedCommitmentBatchCommitment: GeneratedCommitmentBatchCommitments.length,
-      Transact: Transacts.length,
-      TransactCiphertext: TransactCiphertexts.length,
-      Unshield: Unshields.length,
-      Shield: Shields.length,
-      ShieldCiphertext: ShieldCiphertexts.length,
-      ShieldCommitment: ShieldCommitments.length,
-      Transaction: Transactions.length
-    });
+  // if (ENABLE_LOG) {
+  //   console.log("Inserting data...");
+  //   console.table({
+  //     Nullifier: Nullifiers.length,
+  //     CommitmentBatch: CommitmentBatches.length,
+  //     CommitmentBatchCiphertext: CommitmentBatchCiphertexts.length,
+  //     GeneratedCommitmentBatch: GeneratedCommitmentBatches.length,
+  //     GeneratedCommitmentBatchCommitment: GeneratedCommitmentBatchCommitments.length,
+  //     Transact: Transacts.length,
+  //     TransactCiphertext: TransactCiphertexts.length,
+  //     Unshield: Unshields.length,
+  //     Shield: Shields.length,
+  //     ShieldCiphertext: ShieldCiphertexts.length,
+  //     ShieldCommitment: ShieldCommitments.length,
+  //     Transaction: Transactions.length
+  //   });
   }
 
 // base records that other tables depend on

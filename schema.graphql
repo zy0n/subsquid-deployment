@@ -63,7 +63,7 @@ type TransactCiphertext @entity {
   memo: BigInt!
 }
 
-type CommitmentBatch @entity {
+type CommitmentBatch @entity @index(fields: ["treeNumber", "startPosition"])  {
   id: ID!
   actionType: ActionType!
   treeNumber: BigInt!
@@ -76,7 +76,7 @@ type CommitmentBatch @entity {
   # railgunTxidIndex: Int
 }
 
-type GeneratedCommitmentBatch @entity {
+type GeneratedCommitmentBatch @entity @index(fields: ["treeNumber", "startPosition"])  {
   id: ID!
   actionType: ActionType!
   treeNumber: BigInt!
@@ -89,7 +89,7 @@ type GeneratedCommitmentBatch @entity {
   # railgunTxidIndex: Int
 }
 
-type Shield @entity {
+type Shield @entity @index(fields: ["treeNumber", "startPosition"])  {
   id: ID!
   actionType: ActionType!
   treeNumber: BigInt!
@@ -103,7 +103,7 @@ type Shield @entity {
   # railgunTxidIndex: Int
 }
 
-type Transact @entity {
+type Transact @entity @index(fields: ["treeNumber", "startPosition"]) {
   id: ID!
   actionType: ActionType!
   treeNumber: BigInt!
@@ -116,7 +116,7 @@ type Transact @entity {
   #railgunTxidIndex: Int
 }
 
-type Nullifier @entity {
+type Nullifier @entity @index(fields: ["treeNumber"]) {
   id: ID!
   actionType: ActionType!
   treeNumber: BigInt!
@@ -164,7 +164,7 @@ type EVMTransaction @entity {
 
 }
 
-type ActionStream @entity {
+type ActionStream @entity @index(fields: ["blockNumber"]) {
   id: ID!
   blockNumber: BigInt!
   blockHash: Bytes!

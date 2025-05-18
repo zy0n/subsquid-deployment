@@ -5,6 +5,10 @@
         "description": "delete all build artifacts",
         "cmd": ["npx", "--yes", "rimraf", "lib"]
       },
+      "dev": {
+        "description": "Run from a clean slate.",
+        "cmd": ["yarn", "dev"]
+      },
       "build": {
         "description": "Build the squid project",
         "deps": ["clean"],
