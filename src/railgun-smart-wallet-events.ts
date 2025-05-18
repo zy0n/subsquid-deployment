@@ -8,9 +8,9 @@ import { bigIntToPad32Bytes, bigIntToPaddedBytes, bigIntToPaddedHexString, hexSt
 import { getCiphertextData, getCiphertextIV, getCiphertextTag } from "./ciphertext";
 import { createBasicToken, createToken, type BasicToken } from "./token";
 import { getNoteHash } from "./hash";
-import { DataHandlerContext } from "@subsquid/evm-processor";
+import { DataHandlerContext, type BlockData } from "@subsquid/evm-processor";
 import { Store } from "@subsquid/typeorm-store";
-import { CommitmentBatch, CommitmentBatchCiphertext, EVMTransaction, Nullifier, GeneratedCommitmentBatch, GeneratedCommitmentBatchCommitment, Shield, ShieldCiphertext, ShieldCommitment, Transact, TransactCiphertext, Unshield, ActionType } from "./model";
+import { CommitmentBatch, CommitmentBatchCiphertext, EVMTransaction, Nullifier, GeneratedCommitmentBatch, GeneratedCommitmentBatchCommitment, Shield, ShieldCiphertext, ShieldCommitment, Transact, TransactCiphertext, Unshield, ActionType, Action } from "./model";
 
 export function entityIdFromBlockIndex(
   blockNumber: bigint | number,
@@ -20,7 +20,6 @@ export function entityIdFromBlockIndex(
   const pad = (x: bigint | number) => BigInt(x).toString(16).padStart(64, '0')
   const id = `${pad(blockNumber)}${pad(txIndex)}`
   const output =  prefix ? `${prefix}:${id}` : id;
-  // console.log('OUTPUT', output)
 
   return output
 }
@@ -39,17 +38,33 @@ function extractNullifierData(evmLog: any): { treeNumber: bigint, nullifier: big
     throw new Error("Unsupported topic");
 }
 
+export async function generateAction (
+  e: BlockData,
+  ctx: DataHandlerContext<Store>,
+){
+
+  const id = entityIdFromBlockIndex(BigInt(e.header.height), 0n, 'action');
+  const action = new Action({
+    id,
+    blockNumber: BigInt(e.header.height),
+    blockHash: hexStringToBytes(e.header.hash),
+    blockTimestamp: BigInt(e.header.timestamp),
+    actions: []
+  })
+  await ctx.store.save(action)
+  return action;
+}
+
 export async function generateTransaction (
   e: EvmProcessorLog,
   ctx: DataHandlerContext<Store>,
+  action: Action
 ) {
   const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), 'transaction');
   const transaction = new EVMTransaction({
       id,
+      action,
       transactionHash: hexStringToBytes(e.transaction.hash),
-      blockNumber: BigInt(e.block.height),
-      blockHash: hexStringToBytes(e.block.hash),
-      blockTimestamp: BigInt(e.block.timestamp),
       commitmentBatches: [],
       generatedCommitmentBatches: [],
       shields: [],
@@ -194,7 +209,6 @@ export async function handleGeneratedCommitmentBatch(
     const _commitments = await Promise.all(innerCommitments)
     generatedCommitmentBatch.commitments = _commitments
     generatedCommitmentBatch.transaction.generatedCommitmentBatches.push(generatedCommitmentBatch)
-    console.log(generatedCommitmentBatch)
 
     await ctx.store.save(transaction);
     await ctx.store.save(generatedCommitmentBatch);
@@ -304,7 +318,6 @@ export async function handleShield(
     let data = null;
     if (e.topics[0] === events['Shield(uint256,uint256,(bytes32,(uint8,address,uint256),uint120)[],(bytes32[3],bytes32)[],uint256[])'].topic) {
         data = events['Shield(uint256,uint256,(bytes32,(uint8,address,uint256),uint120)[],(bytes32[3],bytes32)[],uint256[])'].decode(e);
-        console.log("USING LATEST SHIELD EVENT")
     }
     else if (e.topics[0] === events['Shield(uint256,uint256,(bytes32,(uint8,address,uint256),uint120)[],(bytes32[3],bytes32)[])'].topic) {
         data = events['Shield(uint256,uint256,(bytes32,(uint8,address,uint256),uint120)[],(bytes32[3],bytes32)[])'].decode(e) // ShieldLegacyPreMar23

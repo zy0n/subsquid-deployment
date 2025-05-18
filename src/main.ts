@@ -2,7 +2,7 @@ import { TypeormDatabase } from '@subsquid/typeorm-store'
 import { processor } from './processor'
 import { events, functions } from './abi/RailgunSmartWallet'
 // import { Ciphertext, CommitmentCiphertext, CommitmentPreimage, LegacyCommitmentCiphertext, LegacyEncryptedCommitment, LegacyGeneratedCommitment, Nullifier, ShieldCommitment, Token, TransactCommitment, Transaction, Unshield } from './model';
-import { generateTransaction, handleCommitmentBatch, handleGeneratedCommitmentBatch, handleNullifier, handleShield, handleTransact, handleUnshield } from './railgun-smart-wallet-events';
+import { generateAction, generateTransaction, handleCommitmentBatch, handleGeneratedCommitmentBatch, handleNullifier, handleShield, handleTransact, handleUnshield } from './railgun-smart-wallet-events';
 import { EvmProcessorLog } from './evm-log';
 // import { handleLegacyTransactionCall, handleTransactionCall } from './railgun-smart-wallet-call';
 import { CommitmentBatch, CommitmentBatchCiphertext, EVMTransaction, GeneratedCommitmentBatch, GeneratedCommitmentBatchCommitment, Nullifier, ShieldCiphertext, ShieldCommitment, TransactCiphertext, type Shield, type Transact, type Unshield } from './model';
@@ -43,12 +43,14 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
 
   for (let c of ctx.blocks) {
     // Handle events
+    const action = await generateAction(c, ctx);
     for (let evt of c.logs) {
       if (evt.address.toLowerCase() !== contractAddress) continue;
 
       const e = evt as EvmProcessorLog;
 
-      const transaction = await generateTransaction(e, ctx);
+
+      const transaction = await generateTransaction(e, ctx, action);
       switch (e.topics[0]) {
         case events.Nullified.topic:
         case events.Nullifiers.topic:
@@ -91,6 +93,8 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
           } break;
       }
       Transactions.push(transaction)
+      action.actions.push(transaction)
+      await ctx.store.save(action)
     }
 
     // Handle call
@@ -121,7 +125,7 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
     // }
   }
 
-  if (true) {
+  if (ENABLE_LOG) {
     console.log("Inserting data...");
     console.table({
       Nullifier: Nullifiers.length,

@@ -124,13 +124,18 @@ type Unshield @entity {
   fee: BigInt!
 }
 
-type EVMTransaction @entity {
+type Action @entity {
   id: ID!
-  transactionHash: Bytes!
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   blockHash: Bytes!
+  actions: [EVMTransaction!]! @derivedFrom(field: "action")
+}
 
+type EVMTransaction @entity {
+  id: ID!
+  transactionHash: Bytes!
+  action: Action!
   commitmentBatches: [CommitmentBatch!]! @derivedFrom(field: "transaction")
   generatedCommitmentBatches: [GeneratedCommitmentBatch!]! @derivedFrom(field: "transaction")
   shields: [Shield!]! @derivedFrom(field: "transaction")
