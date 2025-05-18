@@ -26,7 +26,7 @@ function extractNullifierData(evmLog: any): { treeNumber: bigint, nullifier: big
     throw new Error("Unsupported topic");
 }
 
-function generateTransaction (
+export function generateTransaction (
   e: EvmProcessorLog
 ) {
     return new EVMTransaction({
@@ -54,7 +54,7 @@ function generateTransaction (
 //     return cipherText;
 // }
 
-export function handleNullifier(e: EvmProcessorLog): {
+export function handleNullifier(e: EvmProcessorLog, transaction: EVMTransaction): {
   nullified: Nullifier
 } {
     const data = extractNullifierData(e);
@@ -64,7 +64,7 @@ export function handleNullifier(e: EvmProcessorLog): {
     //   // id,
     //   transactionHash: hexStringToBytes(e.transaction.hash),
     // })
-    const transaction = generateTransaction(e);
+    // const transaction = generateTransaction(e);
     const output = new Nullifier({
         // id,
         transaction,
@@ -97,7 +97,7 @@ export function handleNullifier(e: EvmProcessorLog): {
     // return nullified;
 }
 
-export async function handleCommitmentBatch(e: EvmProcessorLog, ctx: DataHandlerContext<Store>): Promise<{
+export async function handleCommitmentBatch(e: EvmProcessorLog, ctx: DataHandlerContext<Store>, transaction: EVMTransaction): Promise<{
     commitmentBatch: CommitmentBatch
     ciphertext: Array<CommitmentBatchCiphertext>
 }> {
@@ -109,7 +109,7 @@ export async function handleCommitmentBatch(e: EvmProcessorLog, ctx: DataHandler
     //   // id,
     //   transactionHash: hexStringToBytes(e.transaction.hash),
     // })
-    const transaction = generateTransaction(e);
+    // const transaction = generateTransaction(e);
 
     
     // console.log(data);
