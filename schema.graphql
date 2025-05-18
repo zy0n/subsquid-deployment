@@ -1,9 +1,10 @@
-# Sync with TS enum in railgun-smart-wallet.ts
-enum CommitmentType {
-  ShieldCommitment
-  TransactCommitment
-  LegacyGeneratedCommitment
-  LegacyEncryptedCommitment
+enum ActionType {
+  CommitmentBatch
+  GeneratedCommitmentBatch
+  Shield
+  Transact
+  Nullifier
+  Unshield
 }
 
 # Sync with TS enum in railgun-smart-wallet.ts
@@ -20,188 +21,127 @@ type Token @entity {
   tokenSubID: ID!
 }
 
-type CommitmentPreimage @entity {
-  id: ID! # commitment hash
-  npk: Bytes!
+type CommitmentBatchCiphertext @entity {
+  id: ID! # TODO: decide id composition
+  ciphertext: [BigInt!]!
+  ephemeralKeys: [BigInt!]!
+  memo: [BigInt!]!
+}
+
+type GeneratedCommitmentBatchCommitment @entity {
+  id: ID! # TODO: decide id composition
+  npk: BigInt!
   token: Token!
   value: BigInt!
 }
 
-type Ciphertext @entity {
-  id: ID! # commitment hash
-  iv: Bytes!
-  tag: Bytes!
-  data: [Bytes!]!
+# TODO: same as above, determine usefulness of separation.
+type ShieldCommitment @entity {
+  id: ID! # TODO: decide id composition
+  npk: BigInt!
+  token: Token!
+  value: BigInt!
 }
 
-type LegacyCommitmentCiphertext @entity {
-  id: ID! # commitment hash
-  ciphertext: Ciphertext!
-  ephemeralKeys: [Bytes!]!
-  memo: [Bytes!]!
+type ShieldCiphertext @entity {
+  encryptedBundle: [BigInt!]!
+  shieldKey: BigInt!
 }
 
-type CommitmentCiphertext @entity {
-  id: ID! # commitment hash
-  ciphertext: Ciphertext!
-  blindedSenderViewingKey: Bytes!
-  blindedReceiverViewingKey: Bytes!
-  annotationData: Bytes!
-  memo: Bytes!
+type TransactCiphertext @entity {
+  id: ID! # TODO: decide id composition
+  ciphertext: [BigInt!]!
+  blindedSenderViewingKey: BigInt!
+  blindedReceiverViewingKey: BigInt!
+  annotationData: BigInt!
+  memo: BigInt!
 }
 
-# We use an Interface in order to query all Commitment types at once,
-#  but retain strong typings for individual fields.
-interface Commitment @query {
-  id: ID! # tree number + tree position
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
+# Actions 
+type CommitmentBatch @entity {
+  id: ID! # TODO: decide id composition
   treeNumber: Int!
-  batchStartTreePosition: Int!
-  treePosition: Int!
-  commitmentType: CommitmentType!
-  hash: BigInt!
+  startPosition: Int!
+  hash: [BigInt!]!
+  ciphertext: [CommitmentBatchCiphertext!]! @derivedFrom(field: "id")
+
+  # custom tagging
+  actionType: ActionType!
 }
 
-type LegacyGeneratedCommitment implements Commitment @entity @index(fields: ["blockNumber", "treePosition"]) {
-  # Common interface values
-  id: ID! # tree number + tree position
-  blockNumber: BigInt! 
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
+type GeneratedCommitmentBatch @entity {
+  id: ID! # TODO: decide id composition
   treeNumber: Int!
-  batchStartTreePosition: Int!
-  treePosition: Int!
-  commitmentType: CommitmentType!
-  hash: BigInt!
+  startPosition: Int!
+  commitments: [GeneratedCommitmentBatchCommitment!]! @derivedFrom(field: "id")
+  encryptedRandom: [[BigInt!]!]!
 
-  # Custom values: GeneratedCommitmentBatch event
-  preimage: CommitmentPreimage!
-  encryptedRandom: [Bytes!]!
+  # custom tagging
+  actionType: ActionType!
 }
 
-type LegacyEncryptedCommitment implements Commitment @entity @index(fields: ["blockNumber", "treePosition"]) {
-  # Common interface values
-  id: ID! # tree number + tree position
-  blockNumber: BigInt! 
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
+type Shield @entity {
+  id: ID! # TODO: decide id composition
   treeNumber: Int!
-  batchStartTreePosition: Int!
-  treePosition: Int!
-  commitmentType: CommitmentType!
-  hash: BigInt!
+  startPosition: Int!
+  commitments: [ShieldCommitment!]! @derivedFrom(field: "id")
+  shieldCiphertext: [ShieldCiphertext!]! @derivedFrom(field: "id")
 
-  # Custom values: CommitmentBatch event
-  ciphertext: LegacyCommitmentCiphertext!
+  # custom tagging
+  actionType: ActionType!
 }
 
-type ShieldCommitment implements Commitment @entity @index(fields: ["blockNumber", "treePosition"]) {
-  # Common interface values
-  id: ID! # tree number + tree position
-  blockNumber: BigInt! 
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
+# technically this 'event' trigger is the only 
+# time transact is actually called... so in that. do we only need to
+# reference the rgbatch rgtxid here?
+type Transact @entity {
+  id: ID! # TODO: decide id composition
   treeNumber: Int!
-  batchStartTreePosition: Int!
-  treePosition: Int!
-  commitmentType: CommitmentType!
-  hash: BigInt!
+  startPosition: Int!
+  hash: [BigInt!]!
+  ciphertext: [TransactCiphertext!]! @derivedFrom(field: "id")
 
-  # Custom values: Shield event
-  preimage: CommitmentPreimage!
-  encryptedBundle: [Bytes!]!
-  shieldKey: Bytes!
-  fee: BigInt # optional
+  # custom tagging
+  actionType: ActionType!
+
+  #custom extra fields
+  railgunBatchIndex: Int!
+  railgunTxidIndex: Int!
 }
 
-type TransactCommitment implements Commitment @entity @index(fields: ["blockNumber", "treePosition"]) {
-  # Common interface values
-  id: ID! # tree number + tree position
-  blockNumber: BigInt! 
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-  treeNumber: Int!
-  batchStartTreePosition: Int!
-  treePosition: Int!
-  commitmentType: CommitmentType!
-  hash: BigInt!
 
-  # Custom values: Transact event
-  ciphertext: CommitmentCiphertext!
+type Nullifier @entity {
+  id: ID! # TODO: decide id composition
+  treeNumber: BigInt!
+  nullifier: [BigInt!]! # TODO: check ability rename this (s)  
+
+  # custom tagging
+  actionType: ActionType!
 }
 
-type Unshield @entity @index(fields: ["blockNumber", "eventLogIndex"]) {
-  id: ID! # transaction hash + event log index
-  blockNumber: BigInt! 
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-
-  # Custom required values
-  to: Bytes! #address
+type Unshield @entity {
+  id: ID! # TODO: decide id composition
+  npk: BigInt!
   token: Token!
   amount: BigInt!
   fee: BigInt!
-  eventLogIndex: BigInt!
+
+  # custom tagging
+  actionType: ActionType!
 }
 
-type Nullifier @entity @index(fields: ["blockNumber", "nullifier"]) {
-  id: ID! # transaction hash + event log index
-  blockNumber: BigInt! 
-  blockTimestamp: BigInt!
+union RailgunAction = CommitmentBatch | GeneratedCommitmentBatch | Shield | Transact | Nullifier | Unshield
+
+type EVMTransaction @entity {
+  id: ID! # TODO: decide id composition
   transactionHash: Bytes!
-
-  # Custom required values
-  treeNumber: Int!
-  nullifier: Bytes!
+  actions: [RailgunAction!]! @derivedFrom(field: "id")
 }
 
-type Transaction implements TransactionInterface @entity {
-  id: ID!
+interface Action @query {
+  id: ID! # TODO: decide id composition
   blockNumber: BigInt!
-  transactionHash: Bytes!
-  merkleRoot: Bytes!
-  nullifiers: [Bytes!]!
-  commitments: [Bytes!]!
-  boundParamsHash: Bytes!
-  hasUnshield: Boolean!
-  utxoTreeIn: BigInt!
-  utxoTreeOut: BigInt!
-  utxoBatchStartPositionOut: BigInt!
-  unshieldToken: Token!
-  unshieldToAddress: Bytes!
-  unshieldValue: BigInt!
   blockTimestamp: BigInt!
-  verificationHash: Bytes!
-}
-
-interface TransactionInterface {
-  id: ID!
-  blockNumber: BigInt!
-  transactionHash: Bytes!
-  merkleRoot: Bytes!
-  nullifiers: [Bytes!]!
-  commitments: [Bytes!]!
-  boundParamsHash: Bytes!
-  hasUnshield: Boolean!
-  utxoTreeIn: BigInt!
-  utxoTreeOut: BigInt!
-  utxoBatchStartPositionOut: BigInt!
-  unshieldToken: Token!
-  unshieldToAddress: Bytes!
-  unshieldValue: BigInt!
-  blockTimestamp: BigInt!
-  verificationHash: Bytes!
-}
-
-type VerificationHash @entity {
-  id: ID!
-  verificationHash: Bytes!
-}
-
-type CommitmentBatchEventNew @entity {
-  id: ID! # commitment hash
-  treeNumber: BigInt!
-  batchStartTreePosition: BigInt!
+  blockHash: Bytes!
+  transactions: [EVMTransaction!]! @derivedFrom(field: "id")
 }
