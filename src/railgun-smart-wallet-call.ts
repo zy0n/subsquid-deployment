@@ -59,6 +59,12 @@ export const handleLegacyTransactionCall = async (trace: any, ctx: DataHandlerCo
     // transactions: Array<Transaction>
 }> => {
     // console.log('trace', trace)
+
+    // TODO: dont trace any 'errored' calls?
+    // if(trace.error === 'Reverted'){
+    //   return {}
+    // }
+
     const data = functions['transact((((uint256,uint256),(uint256[2],uint256[2]),(uint256,uint256)),uint256,uint256[],uint256[],(uint16,uint8,address,bytes32,(uint256[4],uint256[2],uint256[])[]),(uint256,(uint8,address,uint256),uint120),address)[])']
         .decode(trace.action.input);
 
