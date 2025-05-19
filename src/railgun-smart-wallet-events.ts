@@ -210,10 +210,11 @@ export async function handleCommitmentBatch(
       batchStartTreePosition: startPosition,
       // action
     })
+    action.batchEventNew = commitmentBatchEventNew
 
     await ctx.store.save(commitmentBatch)
     await ctx.store.save(action);
-    
+
     await ctx.store.save(commitmentBatchEventNew)
 
     return {
@@ -287,6 +288,7 @@ export async function handleGeneratedCommitmentBatch(
       batchStartTreePosition: startPosition,
       // action
     })
+    action.batchEventNew = commitmentBatchEventNew
 
     await ctx.store.save(generatedCommitmentBatch);
     await ctx.store.save(action)
@@ -358,8 +360,7 @@ export async function handleTransact(
      
     );
     action.transact = transact;
-    await ctx.store.save(transact)
-    await ctx.store.save(action)
+
 
     // store commitmentBatchEventNew
     const commitmentBatchEventNew = new CommitmentBatchEventNew({
@@ -369,6 +370,10 @@ export async function handleTransact(
       batchStartTreePosition: startPosition,
       // action
     })
+    action.batchEventNew = commitmentBatchEventNew
+    await ctx.store.save(transact)
+    await ctx.store.save(action)
+
     await ctx.store.save(commitmentBatchEventNew)
 
 
