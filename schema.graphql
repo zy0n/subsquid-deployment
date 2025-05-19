@@ -137,7 +137,7 @@ type Action @entity @index(fields: ["eventLogIndex"]) @index(fields: ["type"]) @
   railgunBatchIndex: Int
   railgunTxidIndex: Int
 
-  batchEventNew: CommitmentBatchEventNew
+  # batchEventNew: CommitmentBatchEventNew
 }
 
 type EVMTransaction @entity {
@@ -159,7 +159,7 @@ type CommitmentBatchEventNew @entity {
   id: ID! # commitment hash
   treeNumber: BigInt!
   batchStartTreePosition: BigInt!
-  actions: [Action!]! @derivedFrom(field: "batchEventNew")
+  # actions: [Action!]! @derivedFrom(field: "batchEventNew")
   
   # link the action?
   # action: Action! 

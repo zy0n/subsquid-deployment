@@ -210,7 +210,7 @@ export async function handleCommitmentBatch(
       batchStartTreePosition: startPosition,
       // action
     })
-    action.batchEventNew = commitmentBatchEventNew
+    // action.batchEventNew = commitmentBatchEventNew
 
     await ctx.store.save(commitmentBatch)
     await ctx.store.save(action);
@@ -288,7 +288,7 @@ export async function handleGeneratedCommitmentBatch(
       batchStartTreePosition: startPosition,
       // action
     })
-    action.batchEventNew = commitmentBatchEventNew
+    // action.batchEventNew = commitmentBatchEventNew
 
     await ctx.store.save(generatedCommitmentBatch);
     await ctx.store.save(action)
@@ -363,6 +363,7 @@ export async function handleTransact(
 
 
     // store commitmentBatchEventNew
+    // TODO: These only matter whiile 'processing' so keeing a cache of them for x blocks is fine after 'processed'
     const commitmentBatchEventNew = new CommitmentBatchEventNew({
       // id,
       id: entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), 'commitment-batch-new'),
@@ -370,7 +371,7 @@ export async function handleTransact(
       batchStartTreePosition: startPosition,
       // action
     })
-    action.batchEventNew = commitmentBatchEventNew
+    // action.batchEventNew = commitmentBatchEventNew
     await ctx.store.save(transact)
     await ctx.store.save(action)
 
