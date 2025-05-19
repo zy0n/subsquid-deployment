@@ -10,7 +10,7 @@ import { createBasicToken, createToken, type BasicToken } from "./token";
 import { getNoteHash } from "./hash";
 import { DataHandlerContext, type BlockData } from "@subsquid/evm-processor";
 import { Store } from "@subsquid/typeorm-store";
-import { CommitmentBatch, CommitmentBatchCiphertext, EVMTransaction, Nullifier, GeneratedCommitmentBatch, GeneratedCommitmentBatchCommitment, Shield, ShieldCiphertext, ShieldCommitment, Transact, TransactCiphertext, Unshield, ActionType, Action, type ActionStream } from "./model";
+import { CommitmentBatch, CommitmentBatchCiphertext, EVMTransaction, Nullifier, GeneratedCommitmentBatch, GeneratedCommitmentBatchCommitment, Shield, ShieldCiphertext, ShieldCommitment, Transact, TransactCiphertext, Unshield, ActionType, Action, type ActionStream, CommitmentBatchEventNew } from "./model";
 
 export function entityIdFromBlockIndex(
   blockNumber: bigint | number,
@@ -199,9 +199,23 @@ export async function handleCommitmentBatch(
   
     );
     action.commitmentBatch = commitmentBatch;
+
+    
+
+    // store commitmentBatchEventNew
+    const commitmentBatchEventNew = new CommitmentBatchEventNew({
+      id: entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), 'commitment-batch-new'),
+      // id,
+      treeNumber,
+      batchStartTreePosition: startPosition,
+      // action
+    })
+
     await ctx.store.save(commitmentBatch)
     await ctx.store.save(action);
     
+    await ctx.store.save(commitmentBatchEventNew)
+
     return {
         commitmentBatch,
         ciphertext: ciphertexts
@@ -260,9 +274,25 @@ export async function handleGeneratedCommitmentBatch(
       ActionType.GeneratedCommitmentBatch,
       transaction,
     );
+
+
     action.generatedCommitmentBatch = generatedCommitmentBatch;
+
+
+    // store commitmentBatchEventNew
+    const commitmentBatchEventNew = new CommitmentBatchEventNew({
+      // id,
+      id: entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), 'commitment-batch-new'),
+      treeNumber,
+      batchStartTreePosition: startPosition,
+      // action
+    })
+
     await ctx.store.save(generatedCommitmentBatch);
     await ctx.store.save(action)
+
+    await ctx.store.save(commitmentBatchEventNew)
+
     return {
       generatedCommitmentBatch,
       commitment: _commitments
@@ -330,6 +360,17 @@ export async function handleTransact(
     action.transact = transact;
     await ctx.store.save(transact)
     await ctx.store.save(action)
+
+    // store commitmentBatchEventNew
+    const commitmentBatchEventNew = new CommitmentBatchEventNew({
+      // id,
+      id: entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), 'commitment-batch-new'),
+      treeNumber,
+      batchStartTreePosition: startPosition,
+      // action
+    })
+    await ctx.store.save(commitmentBatchEventNew)
+
 
     return {
       transact,
