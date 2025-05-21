@@ -137,6 +137,8 @@ type Action @entity @index(fields: ["eventLogIndex"]) @index(fields: ["type"]) @
   railgunBatchIndex: Int
   railgunTxidIndex: Int
 
+  links: [ActionLink] derivedFrom(field: "action")
+
   # batchEventNew: CommitmentBatchEventNew
 }
 
@@ -155,6 +157,8 @@ type ActionStream @entity @index(fields: ["blockNumber"]) {
   transactions: [EVMTransaction!]! @derivedFrom(field: "actionStream")
 }
 
+
+# todo: either use this, or link railgunTransaction via action...
 type CommitmentBatchEventNew @entity {
   id: ID! # commitment hash
   treeNumber: BigInt!
@@ -163,4 +167,34 @@ type CommitmentBatchEventNew @entity {
   
   # link the action?
   # action: Action! 
+}
+
+type ActionLink @entity {
+  id: ID!
+  railgunTransaction: RailgunTransaction!
+  action: Action!
+}
+
+
+# use an interface like the OG?
+type RailgunTransaction @entity {
+  id: ID!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+  merkleRoot: Bytes!
+  nullifiers: [Bytes!]!
+  commitments: [Bytes!]!
+  boundParamsHash: Bytes!
+  hasUnshield: Boolean!
+  utxoTreeIn: BigInt!
+  utxoTreeOut: BigInt!
+  utxoBatchStartPositionOut: BigInt!
+  unshieldToken: Token!
+  unshieldToAddress: Bytes!
+  unshieldValue: BigInt!
+  blockTimestamp: BigInt!
+  links: [ActionLink] derivedFrom(field: "railgunTransaction")
+
+  # todo: reimplement this?
+  # verificationHash: Bytes!
 }
