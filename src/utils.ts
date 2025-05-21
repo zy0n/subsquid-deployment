@@ -59,3 +59,12 @@ export const calculateRailgunTransactionVerificationHash = (
     const combinedData = `0x${prefix}${suffix}`;
     return padTo32BytesStart(keccak256(combinedData))
 };
+
+
+export const bufferToBigInt = (buffer: Uint8Array | number[]): bigint =>{
+    let output = 0n;
+    for(const b of buffer){
+        output = (output << 8n) + BigInt(b);
+    }
+    return output;
+}

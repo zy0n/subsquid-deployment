@@ -12,12 +12,13 @@ import { DataHandlerContext, type BlockData } from "@subsquid/evm-processor";
 import { Store } from "@subsquid/typeorm-store";
 import { CommitmentBatch, CommitmentBatchCiphertext, EVMTransaction, Nullifier, GeneratedCommitmentBatch, GeneratedCommitmentBatchCommitment, Shield, ShieldCiphertext, ShieldCommitment, Transact, TransactCiphertext, Unshield, ActionType, Action, type ActionStream, CommitmentBatchEventNew } from "./model";
 
+const pad = (x: bigint | number) => BigInt(x).toString(16).padStart(64, '0')
+
 export function entityIdFromBlockIndex(
   blockNumber: bigint | number,
   txIndex: bigint | number,
   prefix?: string
 ): string {
-  const pad = (x: bigint | number) => BigInt(x).toString(16).padStart(64, '0')
   const id = `${pad(blockNumber)}${pad(txIndex)}`
   const output =  prefix ? `${prefix}:${id}` : id;
 
@@ -85,6 +86,7 @@ export async function generateTransaction(
 
   const transaction = transactionCache.get(id);
 
+
   if (!transaction) {
     const _transaction = new EVMTransaction({
       id,
@@ -132,7 +134,9 @@ export async function handleNullifier(
       id,
       transaction,
       treeNumber,
-      nullifier: nullifier.map(bigIntToPaddedBytes)
+      nullifier: nullifier.map(bigIntToPaddedBytes),
+      eventLogIndex: e.logIndex
+
     })
     const action = await getAction(
       e,
@@ -171,7 +175,9 @@ export async function handleCommitmentBatch(
       treeNumber, 
       startPosition, 
       hash: hash.map(bigIntToPaddedBytes),
-      transaction
+      transaction,
+      eventLogIndex: e.logIndex
+
     })
     await ctx.store.save(commitmentBatch)
     const innerCiphertexts = ciphertext.map(async c=>{
@@ -203,6 +209,7 @@ export async function handleCommitmentBatch(
     
 
     // store commitmentBatchEventNew
+    // TODO: Note: is this by accident?
     const commitmentBatchEventNew = new CommitmentBatchEventNew({
       id: entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), 'commitment-batch-new'),
       // id,
@@ -215,6 +222,7 @@ export async function handleCommitmentBatch(
     await ctx.store.save(commitmentBatch)
     await ctx.store.save(action);
 
+    // TODO: Note: is this by accident?
     await ctx.store.save(commitmentBatchEventNew)
 
     return {
@@ -245,7 +253,9 @@ export async function handleGeneratedCommitmentBatch(
       treeNumber,
       startPosition,
       encryptedRandom: encryptedRandom.map(e=>e.map(bigIntToPaddedBytes)),
-      transaction
+      transaction,
+      eventLogIndex: e.logIndex
+
     })
     await ctx.store.save(generatedCommitmentBatch)
 
@@ -274,6 +284,7 @@ export async function handleGeneratedCommitmentBatch(
       ctx,
       ActionType.GeneratedCommitmentBatch,
       transaction,
+      
     );
 
 
@@ -281,19 +292,22 @@ export async function handleGeneratedCommitmentBatch(
 
 
     // store commitmentBatchEventNew
-    const commitmentBatchEventNew = new CommitmentBatchEventNew({
-      // id,
-      id: entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), 'commitment-batch-new'),
-      treeNumber,
-      batchStartTreePosition: startPosition,
-      // action
-    })
-    // action.batchEventNew = commitmentBatchEventNew
+    // const commitmentBatchEventNew = new CommitmentBatchEventNew({
+    //   // id,
+    //   id: entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), 'commitment-batch-new'),
+    //   treeNumber,
+    //   batchStartTreePosition: startPosition,
+    //   // action
+    // })
 
+    
+    // action.batchEventNew = commitmentBatchEventNew
+    // console.log('setting', commitmentBatchEventNew)
+    // console.log('setting', generatedCommitmentBatch)
     await ctx.store.save(generatedCommitmentBatch);
     await ctx.store.save(action)
 
-    await ctx.store.save(commitmentBatchEventNew)
+    // await ctx.store.save(commitmentBatchEventNew)
 
     return {
       generatedCommitmentBatch,
@@ -324,7 +338,9 @@ export async function handleTransact(
       treeNumber,
       startPosition,
       hash: hash.map(hexStringToBytes),
-      transaction
+      transaction,
+      eventLogIndex: e.logIndex
+
     })
     await ctx.store.save(transact)
     const innerCiphertext = ciphertext.map(async c=>{
@@ -410,7 +426,9 @@ export async function handleUnshield(
       token,
       transaction,
       amount,
-      fee
+      fee,
+      eventLogIndex: e.logIndex
+
     })
 
     const action = await getAction(
@@ -457,7 +475,9 @@ export async function handleShield(
       id,
       treeNumber,
       startPosition,
-      transaction
+      transaction,
+      eventLogIndex: e.logIndex
+
     })
 
     await ctx.store.save(shield);

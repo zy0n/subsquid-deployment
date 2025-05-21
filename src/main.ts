@@ -81,10 +81,10 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
         // await ctx.store.save(actionStream)
       // } 
     }
-
+    // console.log("Added all events for block", c.header.height)
     // Handle call
     for (let tcs of c.traces) {
-        if (tcs.type != 'call') return;
+      if (tcs.type != 'call') return;
         switch (tcs.action.sighash) {
             case functions['transact((((uint256,uint256),(uint256[2],uint256[2]),(uint256,uint256)),bytes32,bytes32[],bytes32[],(uint16,uint72,uint8,uint64,address,bytes32,(bytes32[4],bytes32,bytes32,bytes,bytes)[]),(bytes32,(uint8,address,uint256),uint120))[])'].sighash:
                 {
@@ -108,7 +108,7 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
                 throw new Error(`Unhandled sighash: ${tcs.action.sighash}`);
         }
     }
-
+    // console.log('finished traces for block', c.header.height)
   // if (ENABLE_LOG) {
   //   console.log("Inserting data...");
   //   console.table({

@@ -71,6 +71,9 @@ type CommitmentBatch @entity @index(fields: ["treeNumber", "startPosition"]) {
   hash: [Bytes!]!
   transaction: EVMTransaction!
   ciphertext: [CommitmentBatchCiphertext!]! @derivedFrom(field: "batch")
+
+  eventLogIndex: Int!
+
 }
 
 type GeneratedCommitmentBatch @entity @index(fields: ["treeNumber", "startPosition"]) {
@@ -81,6 +84,9 @@ type GeneratedCommitmentBatch @entity @index(fields: ["treeNumber", "startPositi
   transaction: EVMTransaction!
   commitments: [GeneratedCommitmentBatchCommitment!]! @derivedFrom(field: "batch")
   encryptedRandom: [[Bytes!]!]!
+
+  eventLogIndex: Int!
+
 }
 
 type Shield @entity @index(fields: ["treeNumber", "startPosition"]) {
@@ -92,6 +98,9 @@ type Shield @entity @index(fields: ["treeNumber", "startPosition"]) {
   commitments: [ShieldCommitment!]! @derivedFrom(field: "shield")
   shieldCiphertext: [ShieldCiphertext!]! @derivedFrom(field: "shield")
   fees: [Bytes!]
+
+  eventLogIndex: Int!
+
 }
 
 type Transact @entity @index(fields: ["treeNumber", "startPosition"]) {
@@ -102,6 +111,9 @@ type Transact @entity @index(fields: ["treeNumber", "startPosition"]) {
   hash: [Bytes!]!
   transaction: EVMTransaction!
   ciphertext: [TransactCiphertext!]! @derivedFrom(field: "transact")
+
+  eventLogIndex: Int!
+
 }
 
 type Nullifier @entity @index(fields: ["treeNumber"]) {
@@ -110,6 +122,9 @@ type Nullifier @entity @index(fields: ["treeNumber"]) {
   treeNumber: BigInt!
   nullifier: [Bytes!]!
   transaction: EVMTransaction!
+
+  eventLogIndex: Int!
+
 }
 
 type Unshield @entity {
@@ -120,6 +135,9 @@ type Unshield @entity {
   token: Token!
   amount: BigInt!
   fee: BigInt!
+
+  eventLogIndex: Int!
+
 }
 
 type Action @entity @index(fields: ["eventLogIndex"]) @index(fields: ["type"]) @index(fields: ["shield"]) @index(fields: ["transact"]) @index(fields: ["commitmentBatch"]) @index(fields: ["generatedCommitmentBatch"]) @index(fields: ["nullifier"]) @index(fields: ["unshield"]) {
@@ -137,7 +155,7 @@ type Action @entity @index(fields: ["eventLogIndex"]) @index(fields: ["type"]) @
   railgunBatchIndex: Int
   railgunTxidIndex: Int
 
-  links: [ActionLink] derivedFrom(field: "action")
+  links: [ActionLink!]! @derivedFrom(field: "action")
 
   # batchEventNew: CommitmentBatchEventNew
 }
@@ -159,6 +177,7 @@ type ActionStream @entity @index(fields: ["blockNumber"]) {
 
 
 # todo: either use this, or link railgunTransaction via action...
+
 type CommitmentBatchEventNew @entity {
   id: ID! # commitment hash
   treeNumber: BigInt!
@@ -177,6 +196,7 @@ type ActionLink @entity {
 
 
 # use an interface like the OG?
+
 type RailgunTransaction @entity {
   id: ID!
   blockNumber: BigInt!
@@ -193,7 +213,7 @@ type RailgunTransaction @entity {
   unshieldToAddress: Bytes!
   unshieldValue: BigInt!
   blockTimestamp: BigInt!
-  links: [ActionLink] derivedFrom(field: "railgunTransaction")
+  links: [ActionLink!]! @derivedFrom(field: "railgunTransaction")
 
   # todo: reimplement this?
   # verificationHash: Bytes!

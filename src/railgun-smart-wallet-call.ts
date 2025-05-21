@@ -1,12 +1,12 @@
 import { DataHandlerContext, type Trace, type TraceCall } from "@subsquid/evm-processor";
 import { functions } from "./abi/RailgunSmartWallet";
 import { Store } from "@subsquid/typeorm-store";
-import { SNARK_PRIME_BIG_INT, bigIntToPad32Bytes, bigIntToPaddedBytes, bigIntToPaddedHexString, calculateRailgunTransactionVerificationHash, hexStringToBytes, padTo32BytesStart } from "./utils";
+import { SNARK_PRIME_BIG_INT, bigIntToPad32Bytes, bigIntToPaddedBytes, bigIntToPaddedHexString, bufferToBigInt, calculateRailgunTransactionVerificationHash, hexStringToBytes, padTo32BytesStart } from "./utils";
 import { idFrom2PaddedBigInts, idFrom3PaddedBigInts } from "./id";
 import { createToken } from "./token";
 import { keccak256, AbiCoder } from "ethers";
 import { entityIdFromBlockIndex } from "./railgun-smart-wallet-events";
-import { ActionType, CommitmentBatch, CommitmentBatchEventNew } from "./model";
+import { Action, ActionLink, ActionType, CommitmentBatch, CommitmentBatchEventNew, GeneratedCommitmentBatch, Nullifier, RailgunTransaction } from "./model";
 
 const getBoundParamsHashLegacy = (
     boundParams: any
@@ -76,19 +76,28 @@ export const handleLegacyTransactionCall = async (trace: any, ctx: DataHandlerCo
     //     });
     // }
     // let curVerificationHash = lastVerificationHash.verificationHash;
-    console.log('transactions:',data._transactions.length)
-    const blockNumber = trace.block.height;
-    const transactionIndex = trace.transactionIndex;
+    // console.log()
+    // console.log(''.padStart(64, '='))
+    // console.log('transactions:',data._transactions.length)
+    const blockNumber = BigInt(trace.block.height);
+    const transactionIndex = BigInt(trace.transactionIndex);
     const commitmentBatchId = entityIdFromBlockIndex(blockNumber, transactionIndex, 'commitment-batch-new');
+    const generatedCommitmentBatchID = entityIdFromBlockIndex(blockNumber, transactionIndex, ActionType.GeneratedCommitmentBatch);
+    const commitmentBatchID = entityIdFromBlockIndex(blockNumber, transactionIndex, ActionType.CommitmentBatch);
+    const nullifierBatchID = entityIdFromBlockIndex(blockNumber, transactionIndex, ActionType.Nullifier);
     let batchStartTreePosition = 99999n;
     let treeNumber = 99999n;
 
 
     // TODO: handle this with the 'transaction' ID linkage
-
+    // console.log('commitmnetBatchId', commitmentBatchId)
     let commitmentBatch = await ctx.store.findOneBy(CommitmentBatchEventNew, {
         id: commitmentBatchId
     });
+    // console.log('commitment batch', commitmentBatch)
+ 
+
+
     if (commitmentBatch == null) {
         console.log(`CommitmentBatchEventNew not found for block ${blockNumber}, index: ${transactionIndex} `)
         console.log(trace)
@@ -97,50 +106,150 @@ export const handleLegacyTransactionCall = async (trace: any, ctx: DataHandlerCo
         batchStartTreePosition = commitmentBatch.batchStartTreePosition;
         treeNumber = commitmentBatch.treeNumber;
     }
-
+    // console.log(generatedCommitmentBatchID)
     // const tokens = new Map<string, Token>();
     // const transactions = new Array<Transaction>();
     if (trace.transaction) {
+      // const generatedCommitmentBatches = await ctx.store.findBy(GeneratedCommitmentBatch, {
+      //     id: generatedCommitmentBatchID
+      // });
+
+      // contains list of batches, should be in order of data._transaction index for 'batches'
+      const commitmentBatches = await ctx.store.findOneBy(CommitmentBatch, {
+        id: commitmentBatchID
+      });
+      // contains list of batches, should be in order of data._transaction index for 'batches'
+      const nullifierBatches = await ctx.store.findOneBy(Nullifier, {
+        id: nullifierBatchID
+      });
+      // if(generatedCommitmentBatches.length > 0){
+
+      //   console.log('FOUND GeneratedCommitmentBatches',generatedCommitmentBatches)
+      // }
+      // if(data._transactions.length > 1){
+
+      //   console.log("FOUND CommitmentBatches", commitmentBatches)
+      //   console.log("FOUND NullifierBatches", nullifierBatches)
+      // }
+      
+      // the 
+      // each index is a railgunBatchIndex
         for (let i = 0; i < data._transactions.length; ++i) {
             const id = idFrom3PaddedBigInts(
                 blockNumber,
                 transactionIndex,
                 BigInt(i)
             );
-
-
+      
             const { tokenType, tokenAddress, tokenSubID } = data._transactions[i].withdrawPreimage.token;
             const token = createToken(tokenType, tokenAddress, tokenSubID);
+            await ctx.store.save(token);
             // tokens.set(token.id, token);
 
             const merkleRoot = bigIntToBytesUnconventional(data._transactions[i].merkleRoot).reverse();
             const nullifiers = data._transactions[i].nullifiers;
             const commitments = data._transactions[i].commitments;
 
+
+            // if(data._transactions.length > 1){
+
+            //   // DEBUG LOGGZ
+            //   console.log('cblen',commitmentBatches.length)
+            //   console.log("FOUND CommitmentBatches", commitmentBatches?.map(a=>{
+
+            //     console.log('INSIDE', a)
+            //     const b = a.hash?.map(bufferToBigInt)
+            //     return b
+            //   }))
+            //   console.log('nllen',nullifierBatches.length)
+
+            //   console.log("FOUND NullifierBatches", nullifierBatches?.map(a=>{
+            //     const b = a.nullifier?.map(bufferToBigInt)
+            //     return b;
+            //   }))
+            //   console.log('id', id)
+            //   if(nullifiers.length > 0){
+            //     console.log("We have nullifiers", nullifiers.length)
+            //     console.log(nullifiers)
+            //   }
+  
+            //   if(commitments.length > 0){
+            //     console.log("We have commitments", commitments.length)
+            //     console.log(commitments)
+            //   }
+            // }
+
+            // TODO: keep this maybe?
             // const verificationHexString = `0x${Buffer.from(curVerificationHash).toString('hex')}`;
             // curVerificationHash = hexStringToBytes(calculateRailgunTransactionVerificationHash(verificationHexString,
             //     bigIntToPaddedHexString(nullifiers[0])));
 
-            // const transaction = new Transaction({
-            //     id,
-            //     blockNumber,
-            //     transactionHash: hexStringToBytes(trace.transaction.hash),
-            //     merkleRoot,
-            //     nullifiers: nullifiers.map(nullifier => bigIntToBytesUnconventional(nullifier)),
-            //     commitments: commitments.map(commitment => bigIntToBytesUnconventional(commitment)),
-            //     hasUnshield: data._transactions[i].boundParams.withdraw != 0,
-            //     utxoTreeIn: BigInt(data._transactions[i].boundParams.treeNumber),
-            //     boundParamsHash: hexStringToBytes(getBoundParamsHashLegacy(data._transactions[i].boundParams)),
-            //     utxoTreeOut: treeNumber,
-            //     utxoBatchStartPositionOut: batchStartTreePosition,
-            //     unshieldToken: token,
-            //     unshieldToAddress: bigIntToPaddedBytes(data._transactions[i].withdrawPreimage.npk),
-            //     unshieldValue: data._transactions[i].withdrawPreimage.value,
-            //     blockTimestamp: BigInt(trace.block.timestamp / 1000),
-            //     verificationHash: curVerificationHash
-            // });
+            const transaction = new RailgunTransaction({
+              id,
+              blockNumber,
+              transactionHash: hexStringToBytes(trace.transaction.hash),
+              merkleRoot,
+              nullifiers: nullifiers.map(nullifier => bigIntToBytesUnconventional(nullifier)),
+              commitments: commitments.map(commitment => bigIntToBytesUnconventional(commitment)),
+              hasUnshield: data._transactions[i].boundParams.withdraw != 0,
+              utxoTreeIn: BigInt(data._transactions[i].boundParams.treeNumber),
+              boundParamsHash: hexStringToBytes(getBoundParamsHashLegacy(data._transactions[i].boundParams)),
+              utxoTreeOut: treeNumber,
+              utxoBatchStartPositionOut: batchStartTreePosition,
+              unshieldToken: token,
+              unshieldToAddress: bigIntToPaddedBytes(data._transactions[i].withdrawPreimage.npk),
+              unshieldValue: data._transactions[i].withdrawPreimage.value,
+              blockTimestamp: BigInt(trace.block.timestamp / 1000),
+              // verificationHash: curVerificationHash
+            });
+
+            // make one for each action?
+            
+            // 
+            // damn this is by logIndex, can we get that?
+            // console.log(commitmentBatches[i])
+            // console.log(nullifierBatches[i])
+
+            // might need to findBy and then search by used commitments/nullifiers in this rgtx
+
+            if(!commitmentBatches || !nullifierBatches){
+              throw new Error("No commitment or nullifier batch found.")
+            }
+            await ctx.store.save(transaction);
+
+            const commitmentActionID = entityIdFromBlockIndex(blockNumber, commitmentBatches.eventLogIndex, `action:${ActionType.CommitmentBatch}`);
+            const commitmentAction = await ctx.store.findBy(Action, {
+              id: commitmentActionID
+            });
+            const nullifierActionID = entityIdFromBlockIndex(blockNumber, nullifierBatches.eventLogIndex, `action:${ActionType.Nullifier}`);
+            const nullifierAction = await ctx.store.findBy(Action, {
+              id: nullifierActionID
+            });
+            const nullifierLink = new ActionLink({
+              id: nullifierActionID,
+              railgunTransaction: transaction,
+              action: nullifierAction[i] // technically should be the correct one...
+            })
+
+            const commitmentLink = new ActionLink({
+              id: commitmentActionID,
+              railgunTransaction: transaction,
+              action: commitmentAction[i] // technically should be the correct one...
+            })
+            // console.log("LINKS")
+            // console.log('nullifier', nullifierLink)
+            // console.log('nullifierAction', nullifierAction)
+            // console.log("")
+            // console.log('commitment', commitmentLink)
+            // console.log('commitmentAction', commitmentAction)
 
             // transactions.push(transaction);
+            
+            // commitmentBatches[i]
+              
+            await ctx.store.save(nullifierLink);
+            await ctx.store.save(commitmentLink);
+
             batchStartTreePosition = BigInt(commitments.length) + batchStartTreePosition - (data._transactions[i].boundParams.withdraw != 0 ? 1n : 0n)
         }
 
@@ -148,7 +257,6 @@ export const handleLegacyTransactionCall = async (trace: any, ctx: DataHandlerCo
         //     id: '0x',
         //     verificationHash: curVerificationHash
         // });
-        // await ctx.store.upsert(latestVerificationHash);
     }
 
     return {
