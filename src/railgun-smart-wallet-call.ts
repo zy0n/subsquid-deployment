@@ -99,8 +99,7 @@ export const handleLegacyTransactionCall = async (trace: any, ctx: DataHandlerCo
 
 
     if (commitmentBatch == null) {
-        console.log(`CommitmentBatchEventNew not found for block ${blockNumber}, index: ${transactionIndex} `)
-        console.log(trace)
+        console.log(`CommitmentBatchEventNew not found for block ${blockNumber}, index: ${transactionIndex}  error: ${trace.error}`)
     }
     else {
         batchStartTreePosition = commitmentBatch.batchStartTreePosition;
@@ -110,9 +109,9 @@ export const handleLegacyTransactionCall = async (trace: any, ctx: DataHandlerCo
     // const tokens = new Map<string, Token>();
     // const transactions = new Array<Transaction>();
     if (trace.transaction) {
-      // const generatedCommitmentBatches = await ctx.store.findBy(GeneratedCommitmentBatch, {
-      //     id: generatedCommitmentBatchID
-      // });
+      const generatedCommitmentBatches = await ctx.store.findBy(GeneratedCommitmentBatch, {
+          id: generatedCommitmentBatchID
+      });
 
       // contains list of batches, should be in order of data._transaction index for 'batches'
       const commitmentBatches = await ctx.store.findOneBy(CommitmentBatch, {
@@ -122,10 +121,10 @@ export const handleLegacyTransactionCall = async (trace: any, ctx: DataHandlerCo
       const nullifierBatches = await ctx.store.findOneBy(Nullifier, {
         id: nullifierBatchID
       });
-      // if(generatedCommitmentBatches.length > 0){
+      if(generatedCommitmentBatches.length > 0){
 
-      //   console.log('FOUND GeneratedCommitmentBatches',generatedCommitmentBatches)
-      // }
+        console.log('FOUND GeneratedCommitmentBatches',generatedCommitmentBatches)
+      }
       // if(data._transactions.length > 1){
 
       //   console.log("FOUND CommitmentBatches", commitmentBatches)
@@ -213,6 +212,7 @@ export const handleLegacyTransactionCall = async (trace: any, ctx: DataHandlerCo
             // might need to findBy and then search by used commitments/nullifiers in this rgtx
 
             if(!commitmentBatches || !nullifierBatches){
+              console.log("UHH OH")
               throw new Error("No commitment or nullifier batch found.")
             }
             await ctx.store.save(transaction);
@@ -225,6 +225,20 @@ export const handleLegacyTransactionCall = async (trace: any, ctx: DataHandlerCo
             const nullifierAction = await ctx.store.findBy(Action, {
               id: nullifierActionID
             });
+            if(nullifierAction.length ===0){
+              console.log("nullifierAction:WARNING")
+              console.log("WARNING")
+              console.log("WARNING")
+              console.log("WARNING")
+              console.log("WARNING")
+            }
+            if(commitmentAction.length ===0){
+              console.log("commitmentAction:WARNING")
+              console.log("WARNING")
+              console.log("WARNING")
+              console.log("WARNING")
+              console.log("WARNING")
+            }
             const nullifierLink = new ActionLink({
               id: nullifierActionID,
               railgunTransaction: transaction,
@@ -236,6 +250,25 @@ export const handleLegacyTransactionCall = async (trace: any, ctx: DataHandlerCo
               railgunTransaction: transaction,
               action: commitmentAction[i] // technically should be the correct one...
             })
+
+            // link generatedCommitmentBatch
+            if(generatedCommitmentBatches.length > 0){
+              // this is only relevant if 
+              const generatedCommitmentActionID = entityIdFromBlockIndex(blockNumber, generatedCommitmentBatches[0].eventLogIndex, `action:${ActionType.GeneratedCommitmentBatch}`);
+              const generatedCommitmentAction = await ctx.store.findBy(Action, {
+                id: generatedCommitmentActionID
+              });
+              console.log('ACTION FOUND', generatedCommitmentAction)
+              const generatedCommitmentLink = new ActionLink({
+                id: generatedCommitmentActionID,
+                railgunTransaction: transaction,
+                action: generatedCommitmentAction[i]
+              })
+              console.log('ACTION FOUND', generatedCommitmentLink)
+
+              await ctx.store.save(generatedCommitmentLink);
+
+            }
             // console.log("LINKS")
             // console.log('nullifier', nullifierLink)
             // console.log('nullifierAction', nullifierAction)

@@ -63,7 +63,7 @@ type TransactCiphertext @entity {
   memo: BigInt!
 }
 
-type CommitmentBatch @entity @index(fields: ["treeNumber", "startPosition"]) {
+type CommitmentBatch @entity @index(fields: ["startPosition"]) {
   id: ID!
   actionType: ActionType!
   treeNumber: BigInt!
@@ -76,7 +76,7 @@ type CommitmentBatch @entity @index(fields: ["treeNumber", "startPosition"]) {
 
 }
 
-type GeneratedCommitmentBatch @entity @index(fields: ["treeNumber", "startPosition"]) {
+type GeneratedCommitmentBatch @entity @index(fields: ["startPosition"]) {
   id: ID!
   actionType: ActionType!
   treeNumber: BigInt!
@@ -89,7 +89,7 @@ type GeneratedCommitmentBatch @entity @index(fields: ["treeNumber", "startPositi
 
 }
 
-type Shield @entity @index(fields: ["treeNumber", "startPosition"]) {
+type Shield @entity @index(fields: ["startPosition"]) {
   id: ID!
   actionType: ActionType!
   treeNumber: BigInt!
@@ -103,7 +103,7 @@ type Shield @entity @index(fields: ["treeNumber", "startPosition"]) {
 
 }
 
-type Transact @entity @index(fields: ["treeNumber", "startPosition"]) {
+type Transact @entity @index(fields: ["startPosition"]) {
   id: ID!
   actionType: ActionType!
   treeNumber: BigInt!
@@ -140,7 +140,7 @@ type Unshield @entity {
 
 }
 
-type Action @entity @index(fields: ["eventLogIndex"]) @index(fields: ["type"]) @index(fields: ["shield"]) @index(fields: ["transact"]) @index(fields: ["commitmentBatch"]) @index(fields: ["generatedCommitmentBatch"]) @index(fields: ["nullifier"]) @index(fields: ["unshield"]) {
+type Action @entity @index(fields: ["type"]) @index(fields: ["shield"]) @index(fields: ["transact"]) @index(fields: ["commitmentBatch"]) @index(fields: ["generatedCommitmentBatch"]) @index(fields: ["nullifier"]) @index(fields: ["unshield"]) {
   id: ID!
   type: ActionType!
   transaction: EVMTransaction!

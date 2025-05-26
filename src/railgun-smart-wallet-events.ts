@@ -241,7 +241,7 @@ export async function handleGeneratedCommitmentBatch(
 }> {
     const data = events.GeneratedCommitmentBatch.decode(e);
     const id = entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), ActionType.GeneratedCommitmentBatch);
-
+  
     const [treeNumber, startPosition, commitments, encryptedRandom] = data;
 
     await ctx.store.save(transaction.actionStream)
@@ -257,6 +257,7 @@ export async function handleGeneratedCommitmentBatch(
       eventLogIndex: e.logIndex
 
     })
+    // console.log("storing ", id, BigInt(e.transactionIndex), e.transactionIndex)
     await ctx.store.save(generatedCommitmentBatch)
 
     const innerCommitments = commitments.map(async c=>{
@@ -292,22 +293,21 @@ export async function handleGeneratedCommitmentBatch(
 
 
     // store commitmentBatchEventNew
-    // const commitmentBatchEventNew = new CommitmentBatchEventNew({
-    //   // id,
-    //   id: entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), 'commitment-batch-new'),
-    //   treeNumber,
-    //   batchStartTreePosition: startPosition,
-    //   // action
-    // })
-
-    
+    // this isnt for/from a 'transact' call but we still need to know the startPosition
+    const commitmentBatchEventNew = new CommitmentBatchEventNew({
+      id: entityIdFromBlockIndex(BigInt(e.block.height), BigInt(e.transactionIndex), 'commitment-batch-new'),
+      // id,
+      treeNumber,
+      batchStartTreePosition: startPosition,
+      // action
+    })
     // action.batchEventNew = commitmentBatchEventNew
     // console.log('setting', commitmentBatchEventNew)
     // console.log('setting', generatedCommitmentBatch)
     await ctx.store.save(generatedCommitmentBatch);
     await ctx.store.save(action)
 
-    // await ctx.store.save(commitmentBatchEventNew)
+    await ctx.store.save(commitmentBatchEventNew)
 
     return {
       generatedCommitmentBatch,
